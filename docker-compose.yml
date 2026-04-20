@@ -7,11 +7,22 @@ services:
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: app
-      POSTGRES_PASSWORD: !ChangeMe!
+      POSTGRES_PASSWORD: root
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+
+  php:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: nutri_php
+    volumes:
+      - .:/app
+    depends_on:
+      - database
+    command: tail -f /dev/null # <-- Mantiene el contenedor vivo
 
 volumes:
   db_data:
