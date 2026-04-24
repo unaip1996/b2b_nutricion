@@ -1,31 +1,121 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Infrastructure\Entity;
 
-use Doctrine\DBAL\Types\Types;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Types\UuidType;
+use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'document_chunks')]
 class DocumentChunk
 {
     #[ORM\Id]
+    #[ORM\Column(type: UuidType::NAME, unique: true)]
     #[ORM\GeneratedValue(strategy: 'CUSTOM')]
     #[ORM\CustomIdGenerator(class: 'doctrine.uuid_generator')]
-    #[ORM\Column(type: 'uuid', unique: true)]
-    private ?string $id = null;
+    private ?Uuid $id = null;
 
-    #[ORM\Column(type: Types::TEXT)]
+    #[ORM\Column(type: 'text')]
     private ?string $content = null;
 
-    // ¡La magia de la IA! Un vector de 1536 dimensiones (el tamaño de OpenAI)
+    /** @see https://github.com/pgvector/pgvector-php */
     #[ORM\Column(type: 'vector', length: 1536)]
     private ?string $embedding = null;
 
-    // Getters y Setters básicos
-    public function getId(): ?string { return $this->id; }
-    public function getContent(): ?string { return $this->content; }
-    public function setContent(string $content): self { $this->content = $content; return $this; }
-    public function getEmbedding() { return $this->embedding; }
-    public function setEmbedding($embedding): self { $this->embedding = $embedding; return $this; }
+    #[ORM\Column(type: 'json')]
+    private array $metadata = [];
+
+    #[ORM\ManyToMany(targetEntity: DietaryPlan::class, mappedBy: 'documentChunks')]
+    private Collection $dietaryPlans;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $deletedAt = null;
+
+    public function __construct()
+    {
+        $this->dietaryPlans = new ArrayCollection();
+    }
+
+    public function getId(): ?Uuid
+    {
+        return $this->id;
+    }
+
+    public function getContent(): ?string
+    {
+        return $this->content;
+    }
+
+    public function setContent(string $content): self
+    {
+        $this->content = $content;
+        return $this;
+    }
+
+    public function getEmbedding(): ?string
+    {
+        return $this->embedding;
+    }
+
+    public function setEmbedding(?string $embedding): self
+    {
+        $this->embedding = $embedding;
+        return $this;
+    }
+
+    public function getMetadata(): array
+    {
+        return $this->metadata;
+    }
+
+    public function setMetadata(array $metadata): self
+    {
+        $this->metadata = $metadata;
+        return $this;
+    }
+
+    public function getDeletedAt(): ?\DateTimeImmutable
+    {
+        return $this->deletedAt;
+    }
+
+    public function setDeletedAt(?\DateTimeImmutable $deletedAt): self
+    {
+        $this->deletedAt = $deletedAt;
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, DietaryPlan>
+     */
+    public function getDietaryPlans(): Collection
+    {
+        return $this->dietaryPlans;
+    }
+
+    public function addDietaryPlan(DietaryPlan $dietaryPlan): self
+    {
+        if (!$this->dietaryPlans->contains($dietaryPlan)) {
+            $this->dietaryPlans->add($dietaryPlan);
+        }
+
+        return $this;
+    }
+
+    public function removeDietaryPlan(DietaryPlan $dietaryPlan): self
+    {
+        // The relationship is managed by the DietaryPlan entity (owning side).
+        // This method is just a helper to keep the state consistent.
+        if ($this->dietaryPlans->removeElement($dietaryPlan)) {
+            // If you wanted to also remove the DietaryPlan from the chunk's side
+            // $dietaryPlan->removeDocumentChunk($this);
+        }
+
+        return $this;
+    }
 }
