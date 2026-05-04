@@ -1,0 +1,48 @@
+classDiagram
+    %% Capa de Infraestructura (Entrada)
+    class DietController {
+        <<Infrastructure - Web>>
+        +generateDietAction(Request req) JsonResponse
+    }
+
+    %% Capa de Aplicación (Casos de Uso)
+    class GenerateDietUseCase {
+        <<Application Service>>
+        -PatientRepository patientRepo
+        -RagEngineInterface ragEngine
+        +execute(UUID patientId) DietaryPlan
+    }
+
+    %% Capa de Dominio (Puertos/Interfaces)
+    class PatientRepository {
+        <<Port - Interface>>
+        +findById(UUID id) Patient
+        +save(Patient patient) void
+    }
+    
+    class RagEngineInterface {
+        <<Port - Interface>>
+        +generateFromContext(Patient context) String
+    }
+
+    %% Capa de Infraestructura (Salida/Adaptadores)
+    class PostgresPatientRepository {
+        <<Adapter - Persistence>>
+        -EntityManager em
+        +findById(UUID id) Patient
+        +save(Patient patient) void
+    }
+
+    class OpenAiRagAdapter {
+        <<Adapter - External API>>
+        -HttpClient client
+        -VectorDbClient vectorDb
+        +generateFromContext(Patient context) String
+    }
+
+    %% Relaciones de dependencia e implementación
+    DietController --> GenerateDietUseCase : invoca
+    GenerateDietUseCase --> PatientRepository : usa
+    GenerateDietUseCase --> RagEngineInterface : usa
+    PostgresPatientRepository ..|> PatientRepository : implementa
+    OpenAiRagAdapter ..|> RagEngineInterface : implementa

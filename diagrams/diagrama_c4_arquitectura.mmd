@@ -1,0 +1,36 @@
+graph TD
+    %% Estilos
+    classDef frontend fill:#3178c6,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef backend fill:#8492a6,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef database fill:#336699,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef external fill:#10a37f,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef actor fill:#f39c12,stroke:#fff,stroke-width:2px,color:#fff;
+
+    %% Actores
+    Nutricionista([Nutricionista Clínico]):::actor
+
+    %% Contenedores
+    subgraph Frontend["Capa de Presentación (Docker)"]
+        UI["SPA (Next.js)<br/>Interfaz B2B y Panel de Auditoría"]:::frontend
+    end
+
+    subgraph Backend["Capa de Aplicación y Dominio (Docker)"]
+        API["API REST (Symfony 8.0)<br/>Controladores y Casos de Uso"]:::backend
+        RAG["Motor RAG<br/>Procesamiento Vectorial y Prompts"]:::backend
+    end
+
+    subgraph Infraestructura["Capa de Persistencia (Docker)"]
+        DB[("PostgreSQL + pgvector<br/>Expedientes, Textos y Embeddings")]:::database
+    end
+
+    subgraph Servicios["Servicios Externos"]
+        LLM(("OpenAI API<br/>Modelo Fundacional")):::external
+    end
+
+    %% Relaciones
+    Nutricionista -->|Interactúa con| UI
+    UI -->|Peticiones HTTP/REST| API
+    API <-->|Orquesta| RAG
+    API -->|CRUD de Pacientes| DB
+    RAG -->|Búsqueda Semántica| DB
+    RAG -->|Envía Prompt + Contexto Médico| LLM

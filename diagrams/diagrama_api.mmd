@@ -1,0 +1,20 @@
+graph LR
+    %% Estilos
+    classDef client fill:#3178c6,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef router fill:#f39c12,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef middleware fill:#8e24aa,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef endpoint fill:#336699,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef swagger fill:#10a37f,stroke:#fff,stroke-width:2px,color:#fff;
+
+    Cliente["SPA (Next.js)"]:::client -->|Petición HTTP| Router{"Enrutador API<br/>(Symfony)"}:::router
+    
+    %% Ruta pública/documentación
+    Router -.->|GET /api/docs| Swagger["Interfaz Swagger UI<br/>(OpenAPI)"]:::swagger
+    
+    %% Flujo seguro
+    Router -->|Rutas /api/*| Auth["Middleware de Seguridad<br/>(Validación JWT)"]:::middleware
+    
+    %% Controladores
+    Auth -->|POST /api/patients| C1["PatientController<br/>(Gestión de Expedientes)"]:::endpoint
+    Auth -->|POST /api/ingest| C2["IngestionController<br/>(Procesamiento de PDFs)"]:::endpoint
+    Auth -->|POST /api/diets/generate| C3["DietController<br/>(Orquestación RAG)"]:::endpoint
