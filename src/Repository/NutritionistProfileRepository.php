@@ -2,7 +2,7 @@
 
 namespace App\Repository;
 
-use App\Infraestructure\Entity\NutritionistProfile;
+use App\Infrastructure\Entity\NutritionistProfile;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 

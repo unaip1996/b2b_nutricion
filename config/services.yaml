@@ -35,3 +35,9 @@ services:
 
     App\Domain\Repository\DocumentChunkRepositoryInterface:
         class: App\Infrastructure\Repository\DocumentChunkRepository
+
+    App\Domain\Service\LlmInferenceInterface: '@App\Infrastructure\Adapter\OpenAiLlmAdapter'
+
+    App\Infrastructure\Adapter\OpenAiLlmAdapter:
+        arguments:
+            $apiKey: '%env(OPENAI_API_KEY)%'

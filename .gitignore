@@ -9,4 +9,4 @@
 /vendor/
 ###< symfony/framework-bundle ###
 /.qodo/
-/ejemplo.pdf
+/data/clinical_pdfs/*

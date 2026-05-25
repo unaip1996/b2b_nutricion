@@ -16,11 +16,13 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: nutri_php
+    ports:
+      - "8000:8000" # <-- ABRIMOS EL PUERTO AL EXTERIOR
     volumes:
       - .:/app
     depends_on:
       - database
-    command: tail -f /dev/null # <-- Mantiene el contenedor vivo
+    command: php -S 0.0.0.0:8000 -t public/
 
 volumes:
   db_data:
