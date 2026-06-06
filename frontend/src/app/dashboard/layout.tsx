@@ -1,1 +1,18 @@
-export default function DashboardLayout({ children }: { children: React.ReactNode }) { return <div className="flex min-h-screen bg-slate-50"><aside className="w-64 bg-slate-900 p-6 text-slate-300 border-r border-slate-800"><h1 className="text-white font-bold text-xl">NutriSupport<span className="text-blue-500">.AI</span></h1></aside><main className="flex-1 p-8">{children}</main></div> }
+// src/app/dashboard/layout.tsx
+import type React from "react"
+import { ClinicalSidebar } from "@/components/clinical-sidebar"
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex">
+      <ClinicalSidebar />
+      <main className="h-screen flex-1 overflow-y-auto bg-slate-50 text-slate-900 antialiased">
+        {children}
+      </main>
+    </div>
+  )
+}
