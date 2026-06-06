@@ -1,0 +1,1 @@
+export default function Conocimiento() { return <div>Base de Conocimiento Clínico</div> }

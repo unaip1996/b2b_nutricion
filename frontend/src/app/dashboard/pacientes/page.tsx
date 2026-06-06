@@ -1,0 +1,1 @@
+export default function Pacientes() { return <div>Directorio de Pacientes</div> }
