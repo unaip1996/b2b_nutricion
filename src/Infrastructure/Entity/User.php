@@ -6,11 +6,13 @@ namespace App\Infrastructure\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'users')]
-class User
+class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
@@ -20,6 +22,9 @@ class User
 
     #[ORM\Column(length: 180, unique: true)]
     private ?string $email = null;
+
+    #[ORM\Column(type: 'json')]
+    private array $roles = [];
 
     #[ORM\Column(length: 255)]
     private ?string $password = null;
@@ -50,6 +55,37 @@ class User
         return $this;
     }
 
+    /**
+     * Identificador visual principal del usuario para Symfony.
+     * @see UserInterface
+     */
+    public function getUserIdentifier(): string
+    {
+        return (string) $this->email;
+    }
+
+    /**
+     * @see UserInterface
+     */
+    public function getRoles(): array
+    {
+        $roles = $this->roles;
+        // Garantiza que todos los usuarios tengan al menos este rol base
+        $roles[] = 'ROLE_USER';
+
+        return array_unique($roles);
+    }
+
+    public function setRoles(array $roles): self
+    {
+        $this->roles = $roles;
+
+        return $this;
+    }
+
+    /**
+     * @see PasswordAuthenticatedUserInterface
+     */
     public function getPassword(): ?string
     {
         return $this->password;
@@ -60,6 +96,15 @@ class User
         $this->password = $password;
 
         return $this;
+    }
+
+    /**
+     * Limpia cualquier dato temporal o sensible.
+     * @see UserInterface
+     */
+    public function eraseCredentials(): void
+    {
+        // Si en el futuro guardas contraseñas en texto plano temporalmente, se borran aquí.
     }
 
     public function getLastLogin(): ?\DateTimeImmutable
@@ -81,7 +126,6 @@ class User
 
     public function setNutritionistProfile(NutritionistProfile $nutritionistProfile): self
     {
-        // set the owning side of the relation if necessary
         if ($nutritionistProfile->getAccount() !== $this) {
             $nutritionistProfile->setAccount($this);
         }
