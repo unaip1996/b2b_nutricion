@@ -1,6 +1,18 @@
+"use client"
+
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Brain, Users, BookOpen } from "lucide-react"
 
+const navigation = [
+  { name: "Motor RAG Clínico", href: "/dashboard/rag", icon: Brain },
+  { name: "Directorio Pacientes", href: "/dashboard/patients", icon: Users },
+  { name: "Base de Conocimiento", href: "/dashboard/knowledge-base", icon: BookOpen }, // Asumiendo una ruta /kb
+]
+
 export function ClinicalSidebar() {
+  const pathname = usePathname()
+
   return (
     <aside className="flex w-64 flex-col bg-slate-900">
       {/* Header */}
@@ -14,24 +26,21 @@ export function ClinicalSidebar() {
       <nav className="flex-1 px-4 py-6">
         <h2 className="mb-4 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Panel Clínico</h2>
         <ul className="flex flex-col gap-1">
-          <li>
-            <a href="#" aria-current="page" className="flex items-center gap-3 rounded-lg bg-blue-600/10 px-3 py-2.5 text-sm font-medium text-blue-400 transition-colors">
-              <Brain className="h-5 w-5" aria-hidden="true" />
-              Motor RAG Clínico
-            </a>
-          </li>
-          <li>
-            <a href="#" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200">
-              <Users className="h-5 w-5" aria-hidden="true" />
-              Directorio Pacientes
-            </a>
-          </li>
-          <li>
-            <a href="#" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200">
-              <BookOpen className="h-5 w-5" aria-hidden="true" />
-              Base de Conocimiento
-            </a>
-          </li>
+          {navigation.map((item) => {
+            const isActive = pathname.startsWith(item.href)
+            return (
+              <li key={item.name}>
+                <Link
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isActive ? "bg-blue-600/10 text-blue-400" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"}`}
+                >
+                  <item.icon className="h-5 w-5" aria-hidden="true" />
+                  {item.name}
+                </Link>
+              </li>
+            )
+          })}
         </ul>
       </nav>
 
