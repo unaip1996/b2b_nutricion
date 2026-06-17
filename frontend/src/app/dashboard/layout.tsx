@@ -1,6 +1,6 @@
 // src/app/dashboard/layout.tsx
 import type React from "react"
-import { ClinicalSidebar } from "@/components/clinical-sidebar"
+import { ClinicalSidebar } from "@/components/layout/clinical-sidebar"
 
 export default function DashboardLayout({
   children,

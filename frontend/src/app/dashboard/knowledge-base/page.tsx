@@ -1,6 +1,6 @@
-import { KnowledgeBaseHeader } from "@/components/knowledge-base-header"
-import { KnowledgeBaseToolbar } from "@/components/knowledge-base-toolbar"
-import { DocumentsTable } from "@/components/documents-table"
+import { KnowledgeBaseHeader } from "@/components/knowledge-base/knowledge-base-header"
+import { KnowledgeBaseToolbar } from "@/components/knowledge-base/knowledge-base-toolbar"
+import { DocumentsTable } from "@/components/knowledge-base/documents-table"
 
 export default function Page() {
   return (

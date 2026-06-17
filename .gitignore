@@ -11,3 +11,6 @@
 /.qodo/
 /data/clinical_pdfs/*
 /node_modules/
+###> lexik/jwt-authentication-bundle ###
+/config/jwt/*.pem
+###< lexik/jwt-authentication-bundle ###
