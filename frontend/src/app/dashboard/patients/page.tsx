@@ -1,6 +1,7 @@
 "use client"
 
 import { Plus, Search } from "lucide-react"
+import Link from "next/link"
 import { PatientsTable } from "@/components/patients/patients-table"
 
 export default function Page() {
@@ -21,13 +22,13 @@ export default function Page() {
             className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
           />
         </div>
-        <button
-          type="button"
+        <Link
+          href="/dashboard/patients/create"
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
         >
           <Plus className="size-4" />
           Nuevo Paciente
-        </button>
+        </Link>
       </div>
 
       <PatientsTable />

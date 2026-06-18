@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 export interface Patient {
   id: string;
@@ -34,9 +35,9 @@ function PatientRow({ patient }: { patient: Patient }) {
       </td>
       <td className="p-4 text-sm text-slate-600">{patient.goal || "--"}</td>
       <td className="p-4 text-right">
-        <button type="button" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+        <Link href={`/dashboard/patients/${patient.id}`} className="text-sm font-medium text-blue-600 hover:text-blue-700">
           Editar Ficha
-        </button>
+        </Link>
       </td>
     </tr>
   )

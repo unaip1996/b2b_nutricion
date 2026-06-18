@@ -2,12 +2,25 @@ import { Plus, X } from "lucide-react"
 import { ClinicalCard } from "./clinical-card"
 import { FormField, SelectInput, TextArea } from "./form-field"
 
-const allergies = [
-  { label: "Intolerancia a la lactosa (Severa)" },
-  { label: "Gluten (Leve)" },
-]
+interface ClinicalHistoryColumnProps {
+  formData: any;
+  onChange: (field: string, value: any) => void;
+}
 
-export function ClinicalHistoryColumn() {
+export function ClinicalHistoryColumn({ formData, onChange }: ClinicalHistoryColumnProps) {
+  const allergies = formData.allergies || [];
+
+  const handleAddAllergen = () => {
+    const result = window.prompt("Introduce el nombre del alérgeno:");
+    if (result && result.trim()) {
+      onChange("allergies", [...allergies, result.trim()]);
+    }
+  };
+
+  const handleRemoveAllergen = (allergenToRemove: string) => {
+    onChange("allergies", allergies.filter((a: string) => a !== allergenToRemove));
+  };
+
   return (
     <div className="flex flex-col gap-8 lg:col-span-2">
       <ClinicalCard
@@ -15,6 +28,7 @@ export function ClinicalHistoryColumn() {
         action={
           <button
             type="button"
+            onClick={handleAddAllergen}
             className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -23,21 +37,26 @@ export function ClinicalHistoryColumn() {
         }
       >
         <div className="flex flex-wrap gap-2">
-          {allergies.map((allergy) => (
+          {allergies.length === 0 ? (
+            <span className="text-sm text-slate-500">No hay alérgenos registrados.</span>
+          ) : (
+            allergies.map((allergy: string, idx: number) => (
             <span
-              key={allergy.label}
+              key={`${allergy}-${idx}`}
               className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-800"
             >
-              {allergy.label}
+              {allergy}
               <button
                 type="button"
-                aria-label={`Eliminar ${allergy.label}`}
+                onClick={() => handleRemoveAllergen(allergy)}
+                aria-label={`Eliminar ${allergy}`}
                 className="rounded-full text-red-500 transition-colors hover:text-red-700"
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </span>
-          ))}
+            ))
+          )}
         </div>
       </ClinicalCard>
 
@@ -46,7 +65,8 @@ export function ClinicalHistoryColumn() {
           <TextArea
             id="patologias"
             rows={3}
-            defaultValue="Ninguna patología cardiovascular registrada."
+            value={formData.pathologies || ''}
+            onChange={(e) => onChange('pathologies', e.target.value)}
           />
         </FormField>
       </ClinicalCard>
@@ -56,7 +76,8 @@ export function ClinicalHistoryColumn() {
           <FormField label="Objetivo principal" htmlFor="objetivo">
             <SelectInput
               id="objetivo"
-              defaultValue="Hipertrofia Muscular"
+              value={formData.goal || ''}
+              onChange={(e) => onChange('goal', e.target.value)}
               options={[
                 "Hipertrofia Muscular",
                 "Pérdida de Grasa",
@@ -71,7 +92,8 @@ export function ClinicalHistoryColumn() {
               id="notas"
               rows={5}
               placeholder="Añade observaciones, pautas y seguimiento del paciente..."
-              defaultValue="Aumento progresivo de la ingesta proteica a 1.8 g/kg. Revisión de adherencia en 4 semanas."
+              value={formData.notes || ''}
+              onChange={(e) => onChange('notes', e.target.value)}
             />
           </FormField>
         </div>

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import React, { type ReactNode } from "react"
 
 interface FormFieldProps {
   label: string
@@ -20,61 +20,38 @@ export function FormField({ label, htmlFor, children }: FormFieldProps) {
 const baseInputClasses =
   "w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-blue-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20"
 
-export function TextInput({
-  id,
-  defaultValue,
-  placeholder,
-  type = "text",
-}: {
-  id?: string
-  defaultValue?: string
-  placeholder?: string
-  type?: string
-}) {
+export interface TextInputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+
+export function TextInput({ className, type = "text", ...props }: TextInputProps) {
   return (
     <input
-      id={id}
       type={type}
-      defaultValue={defaultValue}
-      placeholder={placeholder}
-      className={baseInputClasses}
+      className={`${baseInputClasses} ${className || ''}`.trim()}
+      {...props}
     />
   )
 }
 
-export function TextArea({
-  id,
-  defaultValue,
-  placeholder,
-  rows = 4,
-}: {
-  id?: string
-  defaultValue?: string
-  placeholder?: string
-  rows?: number
-}) {
+export interface TextAreaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+
+export function TextArea({ className, rows = 4, ...props }: TextAreaProps) {
   return (
     <textarea
-      id={id}
       rows={rows}
-      defaultValue={defaultValue}
-      placeholder={placeholder}
-      className={`${baseInputClasses} resize-none leading-relaxed`}
+      className={`${baseInputClasses} resize-none leading-relaxed ${className || ''}`.trim()}
+      {...props}
     />
   )
 }
 
-export function SelectInput({
-  id,
-  defaultValue,
-  options,
-}: {
-  id?: string
-  defaultValue?: string
+export interface SelectInputProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   options: string[]
-}) {
+}
+
+export function SelectInput({ options, className, ...props }: SelectInputProps) {
   return (
-    <select id={id} defaultValue={defaultValue} className={baseInputClasses}>
+    <select className={`${baseInputClasses} ${className || ''}`.trim()} {...props}>
+      <option value="" disabled hidden>Selecciona una opción</option>
       {options.map((option) => (
         <option key={option} value={option}>
           {option}
