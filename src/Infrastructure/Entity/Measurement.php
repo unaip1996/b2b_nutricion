@@ -22,19 +22,19 @@ class Measurement
     #[ORM\JoinColumn(nullable: false)]
     private ?Patient $patient = null;
 
-    #[ORM\Column]
+    #[ORM\Column(nullable: true)]
     private ?float $weight = null;
 
-    #[ORM\Column]
+    #[ORM\Column(nullable: true)]
     private ?float $height = null;
 
-    #[ORM\Column(name: 'body_fat_percentage')]
+    #[ORM\Column(name: 'body_fat_percentage', nullable: true)]
     private ?float $bodyFatPercentage = null;
 
-    #[ORM\Column(name: 'muscle_mass')]
+    #[ORM\Column(name: 'muscle_mass', nullable: true)]
     private ?float $muscleMass = null;
 
-    #[ORM\Column(name: 'waist_circumference')]
+    #[ORM\Column(name: 'waist_circumference', nullable: true)]
     private ?float $waistCircumference = null;
 
     #[ORM\Column(type: 'datetime_immutable')]
@@ -42,6 +42,12 @@ class Measurement
 
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $deletedAt = null;
+
+    public function __construct()
+    {
+        // Esto soluciona el error de "takenAt cannot be null"
+        $this->takenAt = new \DateTimeImmutable();
+    }
 
     public function getId(): ?Uuid
     {
@@ -86,7 +92,7 @@ class Measurement
         return $this->bodyFatPercentage;
     }
 
-    public function setBodyFatPercentage(float $bodyFatPercentage): self
+    public function setBodyFatPercentage(?float $bodyFatPercentage): self
     {
         $this->bodyFatPercentage = $bodyFatPercentage;
         return $this;
@@ -97,7 +103,7 @@ class Measurement
         return $this->muscleMass;
     }
 
-    public function setMuscleMass(float $muscleMass): self
+    public function setMuscleMass(?float $muscleMass): self
     {
         $this->muscleMass = $muscleMass;
         return $this;
@@ -108,7 +114,7 @@ class Measurement
         return $this->waistCircumference;
     }
 
-    public function setWaistCircumference(float $waistCircumference): self
+    public function setWaistCircumference(?float $waistCircumference): self
     {
         $this->waistCircumference = $waistCircumference;
         return $this;
