@@ -25,6 +25,9 @@ class Measurement
     #[ORM\Column]
     private ?float $weight = null;
 
+    #[ORM\Column]
+    private ?float $height = null;
+
     #[ORM\Column(name: 'body_fat_percentage')]
     private ?float $bodyFatPercentage = null;
 
@@ -64,6 +67,17 @@ class Measurement
     public function setWeight(float $weight): self
     {
         $this->weight = $weight;
+        return $this;
+    }
+
+    public function getHeight(): ?float
+    {
+        return $this->height;
+    }
+
+    public function setHeight(float $height): self
+    {
+        $this->height = $height;
         return $this;
     }
 
