@@ -11,6 +11,8 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use App\Infrastructure\Entity\DietaryPlan;
+use Doctrine\ORM\EntityManagerInterface;
 use Throwable;
 
 readonly class DietController
@@ -18,45 +20,102 @@ readonly class DietController
     public function __construct(
         private GenerateClinicalDietUseCase $generateClinicalDietUseCase,
         private LoggerInterface $logger,
-    ) {
-    }
+    ) {}
 
     #[Route('/api/diets/generate', name: 'api_diets_generate', methods: ['POST'])]
-    public function generateDiet(Request $request): JsonResponse
+    public function generateDiet(Request $request, GenerateClinicalDietUseCase $useCase): JsonResponse
     {
         try {
-            $payload = json_decode($request->getContent(), true, 512, JSON_THROW_ON_ERROR);
-            
-            $query = $payload['query'] ?? null;
+            $data = json_decode($request->getContent(), true);
 
-            if (!is_string($query) || trim($query) === '') {
-                return new JsonResponse(
-                    ['error' => 'El parámetro "query" es obligatorio y debe ser un texto válido.'],
-                    Response::HTTP_BAD_REQUEST
-                );
+            $patientId = $data['patientId'] ?? null;
+            $query = $data['query'] ?? null;
+            // Extraemos los nuevos parámetros del JSON que envía tu frontend de Next.js
+            $kcal = $data['kcal'] ?? 2000;
+            $startDateStr = $data['startDate'] ?? date('Y-m-d');
+            $endDateStr = $data['endDate'] ?? date('Y-m-d', strtotime('+30 days'));
+
+            if (!$patientId || !$query) {
+                return new JsonResponse(['error' => 'Faltan parámetros obligatorios.'], Response::HTTP_BAD_REQUEST);
             }
 
-            // Asumimos que el Use Case expone un método execute(), acorde a los estándares de CQRS/UseCases.
-            $result = $this->generateClinicalDietUseCase->execute(trim($query));
+            // Parseamos los strings de fecha a objetos DateTimeImmutable que requiere Doctrine
+            $startDate = new \DateTimeImmutable($startDateStr);
+            $endDate = new \DateTimeImmutable($endDateStr);
 
-            return new JsonResponse(
-                ['data' => ['dietary_proposal' => $result]],
-                Response::HTTP_OK
-            );
-        } catch (JsonException $e) {
-            return new JsonResponse(
-                ['error' => 'El cuerpo de la petición debe ser un JSON válido.'],
-                Response::HTTP_BAD_REQUEST
-            );
-        } catch (Throwable $e) {
-            $this->logger->error('Error interno al generar dieta clínica: ' . $e->getMessage(), [
-                'exception' => $e,
+            // ¡Ahora sí le pasamos los 5 parámetros esperados!
+            $dietProposal = $useCase->execute($patientId, $query, (int)$kcal, $startDate, $endDate);
+
+            return new JsonResponse([
+                'data' => [
+                    'dietary_proposal' => $dietProposal
+                ]
+            ], Response::HTTP_OK);
+
+        } catch (\Throwable $e) {
+            return new JsonResponse([
+                'error' => 'Ha ocurrido un error interno en el motor de IA. Detalles: ' . $e->getMessage()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/api/patients/{patientId}/diets', name: 'api_patient_diets_list', methods: ['GET'])]
+    public function listPatientDiets(string $patientId, EntityManagerInterface $em): JsonResponse
+    {
+        try {
+            $diets = $em->getRepository(DietaryPlan::class)->findBy([
+                'patient' => $patientId,
+                'deletedAt' => null
             ]);
 
-            return new JsonResponse(
-                ['error' => 'Ha ocurrido un error interno en el servidor. Por favor, inténtelo más tarde.'],
-                Response::HTTP_INTERNAL_SERVER_ERROR
-            );
+            $now = new \DateTimeImmutable();
+
+            $data = array_map(function (DietaryPlan $plan) use ($now) {
+                // LÓGICA DE ESTADO CALCULADO (Robusta para el TFG)
+                $status = 'Borrador';
+                if ($plan->getStartDate() && $plan->getEndDate()) {
+                    if ($now >= $plan->getStartDate() && $now <= $plan->getEndDate()) {
+                        $status = 'Activo';
+                    } elseif ($now > $plan->getEndDate()) {
+                        $status = 'Expirado';
+                    } else {
+                        $status = 'Programado';
+                    }
+                }
+
+                return [
+                    'id' => $plan->getId()->toRfc4122(),
+                    'createdAt' => $plan->getStartDate() ? $plan->getStartDate()->format('Y-m-d') : date('Y-m-d'),
+                    'kcal' => $plan->getKcal() ?? 2000, // Lee de la nueva columna de la BD
+                    'status' => $status, // Estado dinámico real
+                ];
+            }, $diets);
+
+            return new JsonResponse(['data' => $data], Response::HTTP_OK);
+
+        } catch (\Throwable $e) {
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/api/diets/{id}', name: 'api_diet_delete', methods: ['DELETE'])]
+    public function deleteDiet(string $id, EntityManagerInterface $em): JsonResponse
+    {
+        try {
+            $diet = $em->getRepository(DietaryPlan::class)->find($id);
+
+            if (!$diet) {
+                return new JsonResponse(['error' => 'Pauta nutricional no encontrada.'], Response::HTTP_NOT_FOUND);
+            }
+
+            // Borrado lógico (Soft Delete)
+            $diet->setDeletedAt(new \DateTimeImmutable());
+            $em->flush();
+
+            return new JsonResponse(['message' => 'Pauta eliminada correctamente.'], Response::HTTP_OK);
+
+        } catch (\Throwable $e) {
+            return new JsonResponse(['error' => 'Fallo al eliminar: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }

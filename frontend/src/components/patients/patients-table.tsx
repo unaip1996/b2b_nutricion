@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { BrainCircuit, FileText } from "lucide-react"; // Añade esta línea
 
 export interface Patient {
   id: string;
@@ -34,10 +35,24 @@ function PatientRow({ patient }: { patient: Patient }) {
         <ConditionBadge condition={patient.condition || ""} isAllergy={patient.isAllergy || false} />
       </td>
       <td className="p-4 text-sm text-slate-600">{patient.goal || "--"}</td>
-      <td className="p-4 text-right">
-        <Link href={`/dashboard/patients/${patient.id}`} className="text-sm font-medium text-blue-600 hover:text-blue-700">
-          Editar Ficha
-        </Link>
+      <td className="p-4">
+        <div className="flex items-center justify-end gap-3">
+            <Link 
+                href={`/dashboard/patients/${patient.id}`} 
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition-colors hover:text-blue-600"
+            >
+                <FileText className="h-4 w-4" />
+                Ver Ficha
+            </Link>
+            {/* CORRECCIÓN: Ahora apunta al CRUD de dietas del paciente */}
+            <Link 
+                href={`/dashboard/patients/${patient.id}/diets`} 
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 border border-blue-200"
+            >
+                <BrainCircuit className="h-3.5 w-3.5" />
+                Dietas
+            </Link>
+        </div>
       </td>
     </tr>
   )

@@ -34,6 +34,9 @@ class DietaryPlan
     #[ORM\Column(type: Types::DATE_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $endDate = null;
 
+    #[ORM\Column(type: 'integer', nullable: true)]
+    private ?int $kcal = null;
+
     #[ORM\ManyToMany(targetEntity: DocumentChunk::class, inversedBy: 'dietaryPlans')]
     #[ORM\JoinTable(name: 'dietary_plan_document_chunks')]
     private Collection $documentChunks;
@@ -164,6 +167,17 @@ class DietaryPlan
     public function setDeletedAt(?\DateTimeImmutable $deletedAt): self
     {
         $this->deletedAt = $deletedAt;
+        return $this;
+    }
+
+    public function getKcal(): ?int
+    {
+        return $this->kcal;
+    }
+
+    public function setKcal(?int $kcal): self
+    {
+        $this->kcal = $kcal;
         return $this;
     }
 }
