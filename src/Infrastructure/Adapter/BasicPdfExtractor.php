@@ -18,15 +18,17 @@ class BasicPdfExtractor implements PdfExtractorInterface
         try {
             $parser = new Parser();
             $pdf = $parser->parseFile($filePath);
-            
+
             $text = $pdf->getText();
-            
+
             if (empty(trim($text))) {
                 throw new \RuntimeException('El PDF fue leído pero no contiene texto extraíble (podría ser una imagen escaneada).');
             }
 
-            return $text;
-            
+            // Limpieza básica de saltos de línea y espacios extra para no ensuciar los tokens
+            $text = preg_replace('/\s+/', ' ', $text);
+
+            return trim($text);
         } catch (\Exception $e) {
             throw new \RuntimeException('Fallo al parsear el PDF: ' . $e->getMessage());
         }

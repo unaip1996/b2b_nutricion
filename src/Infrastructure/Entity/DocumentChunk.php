@@ -9,6 +9,7 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Uid\Uuid;
+use Pgvector\Doctrine\VectorType;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'document_chunks')]
@@ -23,9 +24,8 @@ class DocumentChunk
     #[ORM\Column(type: 'text')]
     private ?string $content = null;
 
-    /** @see https://github.com/pgvector/pgvector-php */
-    #[ORM\Column(type: 'vector', length: 1536)]
-    private ?string $embedding = null;
+    #[ORM\Column(type: 'vector', nullable: true)]
+    private ?array $embedding = null;
 
     #[ORM\Column(type: 'json')]
     private array $metadata = [];
