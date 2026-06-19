@@ -12,8 +12,8 @@ nelmio_cors:
             allow_headers: ['Content-Type', 'Authorization']
             allow_methods: ['POST', 'GET', 'OPTIONS', 'PUT', 'DELETE']
             max_age: 3600
-        '^/': # Default config for other routes
-            allow_origin: []
-            allow_headers: []
-            allow_methods: []
-            max_age: 0
+        '^/':
+            allow_origin: ['%env(CORS_ALLOW_ORIGIN)%']
+            allow_headers: ['Content-Type', 'Authorization', 'Accept']
+            allow_methods: ['POST', 'GET', 'OPTIONS', 'PUT', 'DELETE', 'PATCH']
+            max_age: 3600
