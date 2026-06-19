@@ -20,20 +20,18 @@ export function UserForm({ apiUrl, redirectUrl, isProfile = false, method = "PUT
     });
 
     const [isLoading, setIsLoading] = useState(false);
-    // Inicializamos isFetching a false en el servidor.
-    // Se establecerá a true en el lado del cliente después del montaje para activar la carga.
-    const [isFetching, setIsFetching] = useState(false);
+    const [isFetching, setIsFetching] = useState(true); // Iniciamos en true para evitar destellos de campos vacíos
     const [errorMsg, setErrorMsg] = useState("");
-    const [isClient, setIsClient] = useState(false); // Para rastrear si estamos en el lado del cliente
+    const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
-        setIsClient(true); // El componente se ha montado en el cliente
-    }, []); // Se ejecuta solo una vez en el montaje del cliente
+        setIsClient(true);
+    }, []);
 
     useEffect(() => {
-        // Solo comenzamos a buscar si estamos en el lado del cliente y apiUrl está proporcionado
-        if (isClient && apiUrl) {
-            setIsFetching(true); // Establecer a true para deshabilitar los botones mientras se carga
+        // Solo realizamos el fetch si estamos en el cliente, hay una URL y NO estamos creando un usuario nuevo
+        if (isClient && apiUrl && method !== "POST") {
+            setIsFetching(true); 
             const fetchUser = async () => {
                 try {
                     const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
@@ -55,8 +53,11 @@ export function UserForm({ apiUrl, redirectUrl, isProfile = false, method = "PUT
                 }
             };
             fetchUser();
-        } // <--- ¡AQUÍ FALTABA ESTA LLAVE PARA CERRAR EL IF!
-    }, [apiUrl, isClient]);
+        } else if (method === "POST") {
+            // Si es creación, desactivamos el estado de carga inmediatamente
+            setIsFetching(false);
+        }
+    }, [apiUrl, isClient, method]);
 
     const handleFieldChange = (field: string, value: any) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -69,8 +70,6 @@ export function UserForm({ apiUrl, redirectUrl, isProfile = false, method = "PUT
 
         try {
             const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
-            
-            // Si es perfil, no enviamos roles para evitar errores de seguridad en el backend
             const payload = isProfile 
                 ? { email: formData.email, password: formData.password }
                 : formData;
@@ -98,19 +97,25 @@ export function UserForm({ apiUrl, redirectUrl, isProfile = false, method = "PUT
         }
     };
 
+    // 🛡️ GUARDIÁN DE HIDRATACIÓN: Si estamos en el servidor, devolvemos un cascarón o estado de carga limpio.
+    // Esto garantiza que el HTML del servidor y el inicial del cliente sean 100% idénticos.
+    if (!isClient) {
+        return (
+            <div className="mx-auto max-w-3xl px-4 py-12 text-center text-slate-500 font-medium">
+                Cargando entorno clínico...
+            </div>
+        );
+    }
+
+    const isDisabled = isProfile || isLoading || isFetching;
+
     return (
         <form onSubmit={handleSubmit} className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
             <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between border-b border-slate-200 pb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-2">
-                        {isProfile ? (
-                            <UserIcon className="h-7 w-7 text-blue-600" />
-                        ) : (
-                            <UserCheck className="h-7 w-7 text-blue-600" />
-                        )}
-                        {/* En el servidor, isFetching es false, por lo que mostrará "Mi Perfil" o "Editar: email" */}
-                        {/* En el cliente, mostrará "Cargando..." brevemente, luego el título real */}
-                        {isClient && isFetching ? "Cargando..." : isProfile ? "Mi Perfil" : `Editar: ${formData.email}`}
+                        {isProfile ? <UserIcon className="h-7 w-7 text-blue-600" /> : <UserCheck className="h-7 w-7 text-blue-600" />}
+                        {isFetching ? "Cargando..." : isProfile ? "Mi Perfil" : `Editar: ${formData.email}`}
                     </h1>
                     <p className="mt-1 text-sm text-slate-500">
                         {isProfile ? "Gestiona tu información personal" : "Gestión de credenciales y nivel de acceso"}
@@ -180,7 +185,7 @@ export function UserForm({ apiUrl, redirectUrl, isProfile = false, method = "PUT
                             <label key={role} className={`flex items-start gap-3 text-sm text-slate-700 ${isProfile ? 'cursor-default' : 'cursor-pointer'}`}>
                                 <input
                                     type="checkbox"
-                                    disabled={isProfile || isLoading || isFetching}
+                                    disabled={isDisabled}
                                     checked={formData.roles.includes(role)}
                                     onChange={(e) => {
                                         if (isProfile) return;
