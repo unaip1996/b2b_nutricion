@@ -11,5 +11,5 @@ interface EmbeddingGeneratorInterface
      *
      * @return float[]
      */
-    public function generate(string $text): array;
+    public function generateEmbedding(string $text): array;
 }

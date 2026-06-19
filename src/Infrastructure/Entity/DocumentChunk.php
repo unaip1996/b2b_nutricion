@@ -24,8 +24,8 @@ class DocumentChunk
     #[ORM\Column(type: 'text')]
     private ?string $content = null;
 
-    #[ORM\Column(type: 'vector', nullable: true)]
-    private ?array $embedding = null;
+    #[ORM\Column(type: 'vector')] 
+    private ?string $embedding = null;
 
     #[ORM\Column(type: 'json')]
     private array $metadata = [];
@@ -62,9 +62,10 @@ class DocumentChunk
         return $this->embedding;
     }
 
-    public function setEmbedding(?string $embedding): self
+    public function setEmbedding(?string $embedding): static
     {
         $this->embedding = $embedding;
+
         return $this;
     }
 
