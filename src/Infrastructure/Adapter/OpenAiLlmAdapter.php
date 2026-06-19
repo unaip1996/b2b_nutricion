@@ -104,4 +104,9 @@ readonly class OpenAiLlmAdapter implements LlmInferenceInterface
 
         return $output;
     }
+
+    public function generateText(string $systemPrompt, string $userPrompt): string {
+        // Simulacro para no gastar saldo de la API
+        return "Este es un plan dietético generado por la IA simulada.\n\nBasado en la petición y en el expediente del paciente, aquí iría el reparto de macronutrientes y las comidas extraídas de las guías de la base de datos vectorial.";
+    }
 }
