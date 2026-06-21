@@ -1,0 +1,61 @@
+erDiagram
+    USER ||--|| NUTRITIONIST_PROFILE : identifies
+    NUTRITIONIST_PROFILE ||--o{ PATIENT : manages
+    PATIENT ||--o{ MEASUREMENT : tracks_evolution
+    PATIENT ||--o{ DIETARY_PLAN : follows
+    PATIENT }o--o{ ALLERGY : "has_intolerances"
+    
+    DIETARY_PLAN ||--o{ DIET_DAY : contains
+    DIET_DAY ||--o{ MEAL : "divided_into"
+    MEAL ||--o{ MEAL_ITEM : "consists_of"
+    MEAL_ITEM }o--|| FOOD_ITEM : "references"
+
+    CLINICAL_DOCUMENT ||--o{ DOCUMENT_CHUNK : "is_split_into"
+    DOCUMENT_CHUNK }o--o{ DIETARY_PLAN : "augments"
+
+    USER {
+        uuid id PK
+        string email
+        string password
+        datetime last_login
+    }
+
+    PATIENT {
+        uuid id PK
+        string medical_history_number
+        string gender
+        date birth_date
+        boolean active_status
+    }
+
+    MEASUREMENT {
+        uuid id PK
+        float weight
+        float body_fat_percentage
+        float muscle_mass
+        float waist_circumference
+        datetime taken_at
+    }
+
+    FOOD_ITEM {
+        uuid id PK
+        string name
+        float kcal_per_100g
+        json macros "Protein, Carbs, Fats"
+        string category "Legumbres, Carne, etc."
+    }
+
+    DOCUMENT_CHUNK {
+        uuid id PK
+        text content
+        vector embedding "Type: pgvector"
+        json metadata "Source, Page, Reliability"
+    }
+
+    AUDIT_LOG {
+        uuid id PK
+        uuid user_id FK
+        string action "READ/UPDATE/DELETE"
+        string resource_type
+        datetime performed_at
+    }

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   database:
     image: pgvector/pgvector:pg16 
@@ -7,11 +5,24 @@ services:
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: app
-      POSTGRES_PASSWORD: !ChangeMe!
+      POSTGRES_PASSWORD: root
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+
+  php:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: nutri_php
+    ports:
+      - "8000:8000" # <-- ABRIMOS EL PUERTO AL EXTERIOR
+    volumes:
+      - .:/app
+    depends_on:
+      - database
+    command: php -S 0.0.0.0:8000 -t public/
 
 volumes:
   db_data:

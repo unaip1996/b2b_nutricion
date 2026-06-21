@@ -1,0 +1,25 @@
+sequenceDiagram
+    autonumber
+    actor N as Nutricionista
+    participant F as Frontend (Next.js)
+    participant B as API (Symfony)
+    participant DB as Vector DB (Postgres)
+    participant AI as OpenAI API
+
+    N->>F: Sube PDF Médico
+    F->>B: POST /api/ingest
+    B->>B: Extract Text & Chunking
+    B->>AI: Generate Embeddings
+    AI-->>B: Vectors
+    B->>DB: Save Chunks + Vectors
+    Note over N,DB: Fase de Ingesta Completada
+
+    N->>F: Solicita Generación de Dieta
+    F->>B: POST /api/generate-diet
+    B->>DB: Query Similitud (Coseno)
+    DB-->>B: Contexto Médico Relevante
+    B->>B: Construcción de Prompt Dinámico
+    B->>AI: Envío Prompt (Contexto + Datos Paciente)
+    AI-->>B: Propuesta Nutricional (Texto)
+    B-->>F: Respuesta JSON
+    F-->>N: Muestra Dieta para Auditoría

@@ -21,3 +21,23 @@ services:
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
+
+    App\Domain\Service\PdfExtractorInterface:
+        class: App\Infrastructure\Adapter\BasicPdfExtractor
+
+    App\Domain\Service\TextChunkerInterface:
+        class: App\Infrastructure\Service\BasicTextChunker
+
+    App\Domain\Service\EmbeddingGeneratorInterface:
+        class: App\Infrastructure\Adapter\OpenAiEmbeddingAdapter
+        arguments:
+            $openAiApiKey: '%env(OPENAI_API_KEY)%'
+
+    App\Domain\Repository\DocumentChunkRepositoryInterface:
+        class: App\Infrastructure\Repository\DocumentChunkRepository
+
+    App\Domain\Service\LlmInferenceInterface: '@App\Infrastructure\Adapter\OpenAiLlmAdapter'
+
+    App\Infrastructure\Adapter\OpenAiLlmAdapter:
+        arguments:
+            $apiKey: '%env(OPENAI_API_KEY)%'

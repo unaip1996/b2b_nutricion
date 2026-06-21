@@ -1,0 +1,49 @@
+classDiagram
+    class Patient {
+        <<Aggregate Root>>
+        - UUID id
+        - String name
+        - BiometricProfile biometricProfile
+        - ClinicalHistory clinicalHistory
+        + registerAllergy(Allergy allergy)
+        + updateBiometrics(float weight, float height)
+        + getValidatedContext() JSON
+    }
+
+    class BiometricProfile {
+        <<Value Object>>
+        - float weight
+        - float height
+        - int age
+        - String gender
+        + calculateIMC() float
+        + calculateBasalMetabolism() float
+    }
+
+    class ClinicalHistory {
+        <<Entity>>
+        - List~Pathology~ conditions
+        - List~Allergy~ allergies
+        + hasRestriction(String substance) bool
+    }
+
+    class Allergy {
+        <<Value Object>>
+        - String name
+        - String severity
+    }
+
+    class DietaryPlan {
+        <<Entity>>
+        - UUID id
+        - UUID patientId
+        - String content
+        - DateTime createdAt
+        - List~Source~ references
+        + validate() bool
+    }
+
+    Patient "1" *-- "1" BiometricProfile : composition
+    Patient "1" *-- "1" ClinicalHistory : composition
+    ClinicalHistory "1" *-- "n" Allergy : contains
+    DietaryPlan "n" --> "1" Patient : generated for
