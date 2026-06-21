@@ -1,0 +1,32 @@
+classDiagram
+    class User {
+        <<Infrastructure - Security>>
+        - UUID id
+        - String email
+        - String password
+        - Array roles
+        - DateTime lastLogin
+        + getRoles() Array
+        + eraseCredentials() void
+    }
+
+    class AuthProvider {
+        <<Service>>
+        +login(Credentials creds) Token
+        +logout() void
+    }
+
+    class SecurityAuthenticator {
+        <<Infrastructure>>
+        +authenticate(Request request) Passport
+    }
+
+    class NutricionistaProfile {
+        <<Domain>>
+        - String colegiadoNumber
+        - String clinicName
+    }
+
+    User "1" -- "1" NutricionistaProfile : has_profile
+    AuthProvider ..> User : manages
+    SecurityAuthenticator ..> User : validates

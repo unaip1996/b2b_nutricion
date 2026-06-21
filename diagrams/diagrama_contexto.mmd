@@ -1,0 +1,21 @@
+graph TD
+    %% Estilos
+    classDef main fill:#2c3e50,stroke:#fff,stroke-width:4px,color:#fff;
+    classDef actor fill:#f39c12,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef ext fill:#10a37f,stroke:#fff,stroke-width:2px,color:#fff;
+
+    Nutricionista([Nutricionista Clínico]):::actor
+    
+    subgraph Sistema["Sistema B2B Nutri-IA (Tu TFG)"]
+        TFG[("Plataforma de Soporte<br/>Clínico Nutricional")]:::main
+    end
+
+    Nutricionista -->|Gestiona pacientes y genera dietas| TFG
+    TFG -->|Consumo de Modelos LLM| OpenAI[("OpenAI API<br/>(GPT-4o / Embeddings)")]:::ext
+    TFG -->|Envío de notificaciones/reportes| Correo[("Servidor SMTP<br/>(Notificaciones)")]:::ext
+
+    %% Leyenda
+    subgraph Leyenda
+        L2[Actor Humano]:::actor
+        L3[Sistema Externo]:::ext
+    end
