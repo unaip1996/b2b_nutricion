@@ -40,8 +40,74 @@ readonly class OpenAiLlmAdapter implements LlmInferenceInterface
                             'content' => $userPrompt,
                         ],
                     ],
-                    // Temperatura 0 para priorizar el determinismo clínico (RAG)
-                    'temperature' => 0.0, 
+                    'temperature' => 0.0,
+                    
+                    // Forzamos la salida estructurada para hidratar las entidades del dominio
+                    'response_format' => [
+                        'type' => 'json_schema',
+                        'json_schema' => [
+                            'name' => 'dietary_plan_schema',
+                            'strict' => true,
+                            'schema' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'observations' => [
+                                        'type' => 'string',
+                                        'description' => 'Justificación clínica de la dieta basada en los PDFs.'
+                                    ],
+                                    'totalKcal' => [
+                                        'type' => 'integer',
+                                        'description' => 'Calorías totales diarias estimadas promedio.'
+                                    ],
+                                    'days' => [
+                                        'type' => 'array',
+                                        'description' => 'Los días que componen la pauta dietética (ej. 1 al 7).',
+                                        'items' => [
+                                            'type' => 'object',
+                                            'properties' => [
+                                                'dayNumber' => ['type' => 'integer'],
+                                                'meals' => [
+                                                    'type' => 'array',
+                                                    'items' => [
+                                                        'type' => 'object',
+                                                        'properties' => [
+                                                            'type' => [
+                                                                'type' => 'string',
+                                                                'description' => 'Ej: Desayuno, Media Mañana, Comida, Merienda, Cena'
+                                                            ],
+                                                            'time' => ['type' => 'string', 'description' => 'Hora recomendada, ej: 08:30'],
+                                                            'items' => [
+                                                                'type' => 'array',
+                                                                'items' => [
+                                                                    'type' => 'object',
+                                                                    'properties' => [
+                                                                        'foodName' => ['type' => 'string'],
+                                                                        'quantity' => ['type' => 'string', 'description' => 'Ej: 150g, 1 taza'],
+                                                                        'kcal' => ['type' => 'integer'],
+                                                                        'proteins' => ['type' => 'number'],
+                                                                        'carbs' => ['type' => 'number'],
+                                                                        'fats' => ['type' => 'number']
+                                                                    ],
+                                                                    'required' => ['foodName', 'quantity', 'kcal', 'proteins', 'carbs', 'fats'],
+                                                                    'additionalProperties' => false
+                                                                ]
+                                                            ]
+                                                        ],
+                                                        'required' => ['type', 'time', 'items'],
+                                                        'additionalProperties' => false
+                                                    ]
+                                                ]
+                                            ],
+                                            'required' => ['dayNumber', 'meals'],
+                                            'additionalProperties' => false
+                                        ]
+                                    ]
+                                ],
+                                'required' => ['observations', 'totalKcal', 'days'],
+                                'additionalProperties' => false
+                            ]
+                        ]
+                    ]
                 ],
             ]);
 

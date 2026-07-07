@@ -12,6 +12,7 @@ import {
     Calendar,
     Flame
 } from "lucide-react";
+import { GeneratedDietDisplay } from "@/components/rag/generated-diet-display";
 
 interface PatientSelectData {
     id: string;
@@ -297,12 +298,10 @@ Cruzar estos parámetros con las guías clínicas indexadas para emitir un proto
                     </div>
                     <div className="flex-1 bg-slate-50/30 p-6 text-sm text-slate-700">
                         {response ? (
-                            <div className="prose prose-slate prose-sm max-w-none whitespace-pre-wrap font-sans leading-relaxed">
-                                {response}
-                            </div>
+                            <GeneratedDietDisplay dietContent={response} />
                         ) : (
-                            <div className="flex h-full min-h-[400px] items-center justify-center italic text-slate-400 text-center px-8 text-balance">
-                                Define los parámetros en el prompt izquierdo y ejecuta la inferencia para iniciar la búsqueda de similitud vectorial y generar la pauta.
+                            <div className="p-8 text-center text-slate-500">
+                                Selecciona los parámetros y pulsa "Generar Dieta" para comenzar.
                             </div>
                         )}
                     </div>
