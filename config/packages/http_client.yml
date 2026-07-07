@@ -1,0 +1,8 @@
+framework:
+    http_client:
+        scoped_clients:
+            openai.client:
+                base_uri: 'https://api.openai.com/v1/'
+                auth_bearer: '%env(OPENAI_API_KEY)%'
+                headers:
+                    'Content-Type': 'application/json'
