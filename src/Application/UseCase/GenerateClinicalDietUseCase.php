@@ -56,19 +56,20 @@ readonly class GenerateClinicalDietUseCase
         $dietContent = $this->llmInference->generateText($systemPrompt, $userPrompt);
 
         // 7. Persistencia con Trazabilidad (B2B RAG)
-        $dietPlan = new DietaryPlan();
-        $dietPlan->setPatient($patient);
-        $dietPlan->setName("Plan Nutricional RAG - " . $kcal . " kcal");
-        $dietPlan->setKcal($kcal);
-        $dietPlan->setStartDate($startDate);
-        $dietPlan->setEndDate($endDate);
+        $dietaryPlan = new DietaryPlan();
+        $dietaryPlan->setPatient($patient);
+        $dietaryPlan->setName("Plan Nutricional RAG - " . $kcal . " kcal");
+        $dietaryPlan->setObservations($dietContent);
+        $dietaryPlan->setKcal($kcal);
+        $dietaryPlan->setStartDate($startDate);
+        $dietaryPlan->setEndDate($endDate);
         
         // Guardamos la trazabilidad de qué fragmentos se usaron
         foreach ($chunkEntities as $entity) {
-            $dietPlan->addDocumentChunk($entity);
+            $dietaryPlan->addDocumentChunk($entity);
         }
 
-        $this->em->persist($dietPlan);
+        $this->em->persist($dietaryPlan);
         $this->em->flush();
 
         return $dietContent;
