@@ -9,6 +9,7 @@ use App\Infrastructure\Entity\Measurement;
 use App\Infrastructure\Entity\Patient;
 use App\Infrastructure\Repository\PatientRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use OpenApi\Attributes as OA;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,29 +18,46 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
+#[OA\Tag(name: 'Pacientes', description: 'Endpoints para la gestión de expedientes clínicos y biometría')]
 readonly class PatientController
 {
     public function __construct(
         private PatientRepository $patientRepository,
-        private AuthorizationCheckerInterface $authChecker, // Interfaz limpia de permisos
+        private AuthorizationCheckerInterface $authChecker,
         private TokenStorageInterface $tokenStorage,
     ) {}
 
     #[Route('/api/patients', name: 'api_patients_list', methods: ['GET'])]
     #[IsGranted('ROLE_USER')]
+    #[OA\Get(summary: 'Obtiene el listado general de pacientes')]
+    #[OA\Response(
+        response: 200,
+        description: 'Array de pacientes activos filtrados por el perfil del nutricionista autenticado',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'data', type: 'array', items: new OA\Items(
+                    type: 'object',
+                    properties: [
+                        new OA\Property(property: 'id', type: 'string', example: '123e4567-e89b-12d3-a456-426614174000'),
+                        new OA\Property(property: 'medicalHistoryNumber', type: 'string', example: 'PAC-12345'),
+                        new OA\Property(property: 'name', type: 'string', example: 'Unai Pérez'),
+                        new OA\Property(property: 'bmi', type: 'number', example: 24.5)
+                    ]
+                ))
+            ]
+        )
+    )]
     public function list(): JsonResponse
     {
         /** @var Patient[] $patients */
         if ($this->authChecker->isGranted('ROLE_ADMIN')) {
-            // ✅ El Admin ve el panel de control global de la clínica
             $patients = $this->patientRepository->findAllActive();
         } else {
-            // ✅ El Nutricionista solo ve su cartera de pacientes
             $user = $this->tokenStorage->getToken()?->getUser();
             $profile = $user->getNutritionistProfile();
             
             if (!$profile) {
-                // Si por algún error un nutricionista no tiene perfil, devolvemos array vacío por seguridad
                 return new JsonResponse(['data' => []], Response::HTTP_OK);
             }
             
@@ -49,7 +67,6 @@ readonly class PatientController
         $data = array_map(static function (Patient $patient) {
             $age = $patient->getBirthDate() !== null ? $patient->getBirthDate()->diff(new \DateTimeImmutable())->y : null;
             
-            // Calculamos el IMC basándonos en la última medición
             $bmi = null;
             if (method_exists($patient, 'getMeasurements')) {
                 $measurements = $patient->getMeasurements();
@@ -84,6 +101,10 @@ readonly class PatientController
 
     #[Route('/api/patients/{id}', name: 'api_patients_show', methods: ['GET'])]
     #[IsGranted('ROLE_USER')]
+    #[OA\Get(summary: 'Detalle de un paciente incluyendo su historial biométrico')]
+    #[OA\Parameter(name: 'id', description: 'UUID del paciente', in: 'path', schema: new OA\Schema(type: 'string'))]
+    #[OA\Response(response: 200, description: 'Ficha clínica completa y array de mediciones')]
+    #[OA\Response(response: 404, description: 'Paciente no encontrado')]
     public function show(string $id): JsonResponse
     {
         $patient = $this->patientRepository->find($id);
@@ -94,12 +115,33 @@ readonly class PatientController
 
         $age = $patient->getBirthDate() !== null ? $patient->getBirthDate()->diff(new \DateTimeImmutable())->y : 30;
 
-        // Obtener última medición para peso, altura y cálculo de IMC
         $weight = "";
         $height = "";
         $bmi = null;
+        $measurementsData = []; // 🚨 AQUÍ PREPARAMOS EL HISTÓRICO PARA LA GRÁFICA
+
         if (method_exists($patient, 'getMeasurements')) {
             $measurements = $patient->getMeasurements();
+            
+            // 1. Extraemos todo el historial de la gráfica
+            foreach ($measurements as $m) {
+                // Excluimos las mediciones borradas lógicamente (si aplica)
+                if (method_exists($m, 'getDeletedAt') && $m->getDeletedAt() !== null) {
+                    continue;
+                }
+
+                $measurementsData[] = [
+                    'id' => $m->getId() ? (string) $m->getId() : null,
+                    'weight' => $m->getWeight(),
+                    'height' => method_exists($m, 'getHeight') ? $m->getHeight() : null,
+                    'bodyFatPercentage' => method_exists($m, 'getBodyFatPercentage') ? $m->getBodyFatPercentage() : null,
+                    'muscleMass' => method_exists($m, 'getMuscleMass') ? $m->getMuscleMass() : null,
+                    'waistCircumference' => method_exists($m, 'getWaistCircumference') ? $m->getWaistCircumference() : null,
+                    'takenAt' => method_exists($m, 'getTakenAt') && $m->getTakenAt() ? $m->getTakenAt()->format(\DateTimeInterface::ATOM) : null,
+                ];
+            }
+
+            // 2. Mantenemos la lógica para sacar el último dato para los inputs del formulario
             $latest = $measurements->count() > 0 ? $measurements->last() : null;
             if ($latest) {
                 $weight = (string) $latest->getWeight();
@@ -127,16 +169,30 @@ readonly class PatientController
             'email' => $patient->getEmail(),
             'weight' => $weight,
             'height' => $height,
-            'bmi' => (string) $bmi, // Devolvemos el dato calculado
+            'bmi' => (string) $bmi,
             'pathologies' => $patient->getPathologies(),
             'goal' => $patient->getNutritionalGoal(),
             'notes' => $patient->getClinicalNotes(),
             'allergies' => $allergies,
+            'measurements' => $measurementsData, // 🚨 AHORA SÍ ENVIAMOS EL HISTÓRICO
         ]], Response::HTTP_OK);
     }
 
     #[Route('/api/patients/{id}', name: 'api_patients_update', methods: ['PUT'])]
     #[IsGranted('ROLE_USER')]
+    #[OA\Put(summary: 'Actualiza los datos de un paciente y registra nuevas métricas biométricas si varían')]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: 'name', type: 'string'),
+                new OA\Property(property: 'weight', type: 'number', format: 'float'),
+                new OA\Property(property: 'bodyFatPercentage', type: 'number', format: 'float'),
+                new OA\Property(property: 'allergies', type: 'array', items: new OA\Items(type: 'string'))
+            ]
+        )
+    )]
+    #[OA\Response(response: 200, description: 'Paciente actualizado con éxito')]
     public function update(string $id, Request $request, EntityManagerInterface $em): JsonResponse
     {
         try {
@@ -147,7 +203,6 @@ readonly class PatientController
 
             $payload = json_decode($request->getContent(), true, 512, JSON_THROW_ON_ERROR);
 
-            // Actualizar datos base
             $patient->setName($payload['name'] ?? $patient->getName());
             $patient->setGender($payload['gender'] ?? $patient->getGender());
             $patient->setEmail($payload['email'] ?? $patient->getEmail());
@@ -161,27 +216,21 @@ readonly class PatientController
                 $patient->setBirthDate(new \DateTimeImmutable('-' . $age . ' years'));
             }
 
-            // --- LÓGICA REFINADA DE MÉTRICAS ---
             $payloadWeight = isset($payload['weight']) ? (float) $payload['weight'] : null;
             $payloadHeight = isset($payload['height']) ? (float) $payload['height'] : null;
 
             $measurements = method_exists($patient, 'getMeasurements') ? $patient->getMeasurements() : null;
             $latest = ($measurements && $measurements->count() > 0) ? $measurements->last() : null;
 
-            $lastWeight = $latest ? clone $latest : null;
-
-            // Condición estricta: Solo creamos si no había ninguna, o si el peso/altura que llega es diferente al último.
             if (!$latest || ($payloadWeight !== null && $payloadWeight !== $latest->getWeight()) || ($payloadHeight !== null && $payloadHeight !== $latest->getHeight())) {
                 
                 $measurement = new Measurement();
                 
-                // Actualizamos peso y altura
                 $measurement->setWeight($payloadWeight ?? ($latest ? $latest->getWeight() : 0.0));
                 if (method_exists($measurement, 'setHeight')) {
                     $measurement->setHeight($payloadHeight ?? ($latest ? $latest->getHeight() : 0.0));
                 }
 
-                // Heredar o rellenar los "datos calculados" y secundarios para que no den error de base de datos
                 if (method_exists($measurement, 'setBodyFatPercentage')) {
                     $measurement->setBodyFatPercentage((float) ($payload['bodyFatPercentage'] ?? ($latest ? $latest->getBodyFatPercentage() : 0.0)));
                 }
@@ -199,7 +248,6 @@ readonly class PatientController
                 $em->persist($measurement);
             }
 
-            // Actualizar alergias
             if (isset($payload['allergies']) && is_array($payload['allergies'])) {
                 foreach ($patient->getAllergies() as $existingAllergy) {
                     $patient->removeAllergy($existingAllergy);
@@ -228,6 +276,8 @@ readonly class PatientController
 
     #[Route('/api/patients', name: 'api_patients_create', methods: ['POST'])]
     #[IsGranted('ROLE_USER')]
+    #[OA\Post(summary: 'Crea un nuevo expediente de paciente clínico')]
+    #[OA\Response(response: 201, description: 'Paciente creado con éxito, retorna el ID')]
     public function create(Request $request, EntityManagerInterface $em): JsonResponse
     {
         try {
@@ -245,8 +295,8 @@ readonly class PatientController
 
             $patient->setMedicalHistoryNumber('PAC-' . random_int(10000, 99999));
 
-            $user = $this->security->getUser();
-            $profile = $user->getNutritionistProfile();
+            $user = $this->tokenStorage->getToken()?->getUser();
+            $profile = method_exists($user, 'getNutritionistProfile') ? $user->getNutritionistProfile() : null;
             
             if ($profile && method_exists($patient, 'setNutritionistProfile')) {
                 $patient->setNutritionistProfile($profile);
@@ -263,7 +313,6 @@ readonly class PatientController
                     $measurement->setHeight((float) ($payload['height'] ?? 0.0));
                 }
 
-                // Recibir el dato dinámico del front o usar valor seguro para el NOT NULL
                 if (method_exists($measurement, 'setBodyFatPercentage')) {
                     $measurement->setBodyFatPercentage((float) ($payload['bodyFatPercentage'] ?? 0.0));
                 }
@@ -307,6 +356,9 @@ readonly class PatientController
 
     #[Route('/api/patients/{id}', name: 'api_patients_delete', methods: ['DELETE'])]
     #[IsGranted('ROLE_USER')]
+    #[OA\Delete(summary: 'Borrado lógico (Soft Delete) de un paciente y todos sus datos en cascada')]
+    #[OA\Parameter(name: 'id', description: 'UUID del paciente', in: 'path', schema: new OA\Schema(type: 'string'))]
+    #[OA\Response(response: 200, description: 'Paciente y datos vinculados eliminados')]
     public function delete(string $id, EntityManagerInterface $em): JsonResponse
     {
         try {
@@ -317,11 +369,9 @@ readonly class PatientController
 
             $now = new \DateTimeImmutable();
             
-            // Soft delete del paciente
             $patient->setDeletedAt($now);
             $patient->setActiveStatus(false);
 
-            // Soft delete cascade en Measurements relacionados
             if (method_exists($patient, 'getMeasurements')) {
                 foreach ($patient->getMeasurements() as $measurement) {
                     if (method_exists($measurement, 'setDeletedAt')) {
@@ -330,7 +380,6 @@ readonly class PatientController
                 }
             }
 
-            // Soft delete cascade en DietaryPlans relacionados (si aplica en tu esquema)
             if (method_exists($patient, 'getDietaryPlans')) {
                 foreach ($patient->getDietaryPlans() as $plan) {
                     if (method_exists($plan, 'setDeletedAt')) {
@@ -340,9 +389,9 @@ readonly class PatientController
             }
 
             $em->flush();
-            return new JsonResponse(['message' => 'Paciente y datos clínicos vinculados eliminados correctamente (Soft Delete)'], Response::HTTP_OK);
+            return new JsonResponse(['message' => 'Paciente y datos vinculados eliminados (Soft Delete)'], Response::HTTP_OK);
         } catch (\Throwable $e) {
-            return new JsonResponse(['error' => 'Error al ejecutar borrado lógico: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return new JsonResponse(['error' => 'Error al ejecutar borrado: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }

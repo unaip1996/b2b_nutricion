@@ -5,16 +5,17 @@ declare(strict_types=1);
 namespace App\Infrastructure\Controller;
 
 use App\Application\UseCase\GenerateClinicalDietUseCase;
-use JsonException;
+use App\Infrastructure\Entity\DietaryPlan;
+use Doctrine\ORM\EntityManagerInterface;
+use OpenApi\Attributes as OA;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
-use App\Infrastructure\Entity\DietaryPlan;
-use Doctrine\ORM\EntityManagerInterface;
 use Throwable;
 
+#[OA\Tag(name: 'Dietas y Motor RAG', description: 'Endpoints para la generación de dietas mediante Inteligencia Artificial y gestión de pautas')]
 readonly class DietController
 {
     public function __construct(
@@ -23,6 +24,37 @@ readonly class DietController
     ) {}
 
     #[Route('/api/diets/generate', name: 'api_diets_generate', methods: ['POST'])]
+    #[OA\Post(summary: 'Genera una pauta nutricional estructurada utilizando el Motor RAG')]
+    #[OA\RequestBody(
+        required: true,
+        description: 'Parámetros clínicos y petición en lenguaje natural para la IA',
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: 'patientId', type: 'string', description: 'UUID del paciente'),
+                new OA\Property(property: 'query', type: 'string', example: 'Dieta baja en FODMAPs, enfocada en ganar masa muscular'),
+                new OA\Property(property: 'kcal', type: 'integer', example: 2500),
+                new OA\Property(property: 'startDate', type: 'string', format: 'date', example: '2026-07-08'),
+                new OA\Property(property: 'endDate', type: 'string', format: 'date', example: '2026-08-08')
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 200,
+        description: 'Dieta generada exitosamente. Devuelve el JSON estructurado por OpenAI',
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(
+                    property: 'data', 
+                    type: 'object',
+                    properties: [
+                        new OA\Property(property: 'dietary_proposal', type: 'string', description: 'String JSON con la dieta estructurada')
+                    ]
+                )
+            ]
+        )
+    )]
+    #[OA\Response(response: 400, description: 'Faltan parámetros obligatorios')]
+    #[OA\Response(response: 500, description: 'Error interno en el motor de inferencia (LLM)')]
     public function generateDiet(Request $request, GenerateClinicalDietUseCase $useCase): JsonResponse
     {
         try {
@@ -30,7 +62,6 @@ readonly class DietController
 
             $patientId = $data['patientId'] ?? null;
             $query = $data['query'] ?? null;
-            // Extraemos los nuevos parámetros del JSON que envía tu frontend de Next.js
             $kcal = $data['kcal'] ?? 2000;
             $startDateStr = $data['startDate'] ?? date('Y-m-d');
             $endDateStr = $data['endDate'] ?? date('Y-m-d', strtotime('+30 days'));
@@ -39,11 +70,9 @@ readonly class DietController
                 return new JsonResponse(['error' => 'Faltan parámetros obligatorios.'], Response::HTTP_BAD_REQUEST);
             }
 
-            // Parseamos los strings de fecha a objetos DateTimeImmutable que requiere Doctrine
             $startDate = new \DateTimeImmutable($startDateStr);
             $endDate = new \DateTimeImmutable($endDateStr);
 
-            // ¡Ahora sí le pasamos los 5 parámetros esperados!
             $dietProposal = $useCase->execute($patientId, $query, (int)$kcal, $startDate, $endDate);
 
             return new JsonResponse([
@@ -60,6 +89,29 @@ readonly class DietController
     }
 
     #[Route('/api/patients/{patientId}/diets', name: 'api_patient_diets_list', methods: ['GET'])]
+    #[OA\Get(summary: 'Lista el historial de dietas generadas para un paciente específico')]
+    #[OA\Parameter(name: 'patientId', description: 'UUID del paciente', in: 'path', required: true, schema: new OA\Schema(type: 'string'))]
+    #[OA\Response(
+        response: 200,
+        description: 'Array con el listado de dietas del paciente',
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(
+                    property: 'data', 
+                    type: 'array', 
+                    items: new OA\Items(
+                        type: 'object',
+                        properties: [
+                            new OA\Property(property: 'id', type: 'string', example: '123e4567-e89b-12d3-a456-426614174000'),
+                            new OA\Property(property: 'createdAt', type: 'string', format: 'date'),
+                            new OA\Property(property: 'kcal', type: 'integer'),
+                            new OA\Property(property: 'status', type: 'string', example: 'Activo')
+                        ]
+                    )
+                )
+            ]
+        )
+    )]
     public function listPatientDiets(string $patientId, EntityManagerInterface $em): JsonResponse
     {
         try {
@@ -71,7 +123,6 @@ readonly class DietController
             $now = new \DateTimeImmutable();
 
             $data = array_map(function (DietaryPlan $plan) use ($now) {
-                // LÓGICA DE ESTADO CALCULADO (Robusta para el TFG)
                 $status = 'Borrador';
                 if ($plan->getStartDate() && $plan->getEndDate()) {
                     if ($now >= $plan->getStartDate() && $now <= $plan->getEndDate()) {
@@ -86,8 +137,8 @@ readonly class DietController
                 return [
                     'id' => $plan->getId()->toRfc4122(),
                     'createdAt' => $plan->getStartDate() ? $plan->getStartDate()->format('Y-m-d') : date('Y-m-d'),
-                    'kcal' => $plan->getKcal() ?? 2000, // Lee de la nueva columna de la BD
-                    'status' => $status, // Estado dinámico real
+                    'kcal' => $plan->getKcal() ?? 2000, 
+                    'status' => $status, 
                 ];
             }, $diets);
 
@@ -99,6 +150,10 @@ readonly class DietController
     }
 
     #[Route('/api/diets/{id}', name: 'api_diet_delete', methods: ['DELETE'])]
+    #[OA\Delete(summary: 'Elimina lógicamente (Soft Delete) una pauta nutricional')]
+    #[OA\Parameter(name: 'id', description: 'UUID de la dieta a eliminar', in: 'path', required: true, schema: new OA\Schema(type: 'string'))]
+    #[OA\Response(response: 200, description: 'Pauta eliminada correctamente')]
+    #[OA\Response(response: 404, description: 'Pauta nutricional no encontrada')]
     public function deleteDiet(string $id, EntityManagerInterface $em): JsonResponse
     {
         try {
