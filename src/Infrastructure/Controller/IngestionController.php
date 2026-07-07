@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Infrastructure\Controller;
 
 use App\Application\UseCase\IngestClinicalDocumentUseCase;
+use App\Infrastructure\Entity\ClinicalDocument;
+use App\Infrastructure\Repository\ClinicalDocumentRepository;
 use App\Infrastructure\Repository\DocumentChunkRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,7 +19,8 @@ readonly class IngestionController
 {
     public function __construct(
         private DocumentChunkRepository $documentChunkRepository,
-        private IngestClinicalDocumentUseCase $ingestUseCase
+        private IngestClinicalDocumentUseCase $ingestUseCase,
+        private ClinicalDocumentRepository $documentRepository
     ) {}
 
     #[Route('/api/ingest', name: 'api_ingest_document', methods: ['POST'])]
@@ -29,7 +33,7 @@ readonly class IngestionController
             return new JsonResponse(['error' => 'Falta el archivo PDF en la petición.'], Response::HTTP_BAD_REQUEST);
         }
 
-        // 🚨 NUEVA VALIDACIÓN: Comprueba si PHP bloqueó el archivo (ej. por exceso de tamaño)
+        // Comprueba si PHP bloqueó el archivo (ej. por exceso de tamaño)
         if (!$file->isValid()) {
             return new JsonResponse([
                 'error' => 'El servidor rechazó el archivo. Causa: ' . $file->getErrorMessage()
@@ -46,7 +50,7 @@ readonly class IngestionController
 
         try {
             // Ejecución global, sin ataduras a pacientes
-            $this->ingestUseCase->execute($file->getPathname(), $file->getClientOriginalName());
+            $this->ingestUseCase->execute($file);
             
             return new JsonResponse([
                 'message' => 'Guía clínica indexada correctamente en la base de conocimiento global.'
@@ -63,44 +67,64 @@ readonly class IngestionController
     #[IsGranted('ROLE_USER')]
     public function listDocuments(): JsonResponse
     {
-        $result = $this->documentChunkRepository->findGroupedDocuments();
+        try {
+            // Buscamos todos los documentos clínicos indexados
+            $documents = $this->documentRepository->findAllActive();
 
-        $documents = array_map(function (array $row) {
-            // Si ingested_at es null, usamos la fecha actual o una por defecto
-            $fechaStr = $row['ingested_at'] ?? 'now';
-            // Si file_name es null, le ponemos un nombre genérico
-            $nombre = $row['file_name'] ?? 'Documento Antiguo (Sin nombre)';
+            $data = [];
+            foreach ($documents as $doc) {
+                $data[] = [
+                    'id' => $doc->getId()->toString(),
+                    'title' => $doc->getFileName(),
+                    'chunksCount' => $doc->getChunks()->count(),
+                    'uploadedAt' => $doc->getIngestedAt()->format(\DateTimeInterface::ATOM),
+                    'status' => 'indexed',
+                ];
+            }
 
-            return [
-                'nombre' => $nombre,
-                'fecha' => (new \DateTime($fechaStr))->format('d M Y, H:i'),
-                'chunks' => $row['chunk_count'] . ' Chunks',
-                'tipo' => 'Guía Clínica / Protocolo'
-            ];
-        }, $result);
-
-        return new JsonResponse(['data' => $documents], Response::HTTP_OK);
+            return new JsonResponse($data, Response::HTTP_OK);
+        } catch (\Exception $e) {
+            return new JsonResponse([
+                'error' => 'Error al recuperar la base de conocimiento',
+                'message' => $e->getMessage()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
-    #[Route('/api/knowledge-base/{fileName}', name: 'api_knowledge_base_delete', methods: ['DELETE'])]
+    #[Route('/api/knowledge-base/{id}', name: 'api_knowledge_base_delete', methods: ['DELETE'])]
     #[IsGranted('ROLE_USER')]
-    public function deleteDocument(Request $request, string $fileName): JsonResponse
+    public function deleteDocument(string $id, EntityManagerInterface $entityManager): JsonResponse
     {
 
         try {
-            // Decodificamos el nombre por si viene con espacios o tildes en la URL (%20, etc)
-            $decodedFileName = urldecode($fileName);
-            
-            $this->documentChunkRepository->deleteByFileName($decodedFileName);
+            $document = $entityManager->getRepository(ClinicalDocument::class)->find($id);
 
-            return new JsonResponse([
-                'message' => 'Documento y sus vectores eliminados de la base de conocimiento.'
-            ], Response::HTTP_OK);
+            // Verificamos si el documento no existe o si ya ha sido borrado lógicamente
+            if (!$document || $document->getDeletedAt() !== null) {
+                return new JsonResponse(['error' => 'Documento no encontrado o ya eliminado'], Response::HTTP_NOT_FOUND);
+            }
+
+            $now = new \DateTimeImmutable();
+
+            foreach ($document->getChunks() as $chunk) {
+                if (method_exists($chunk, 'setDeletedAt')) {
+                    $chunk->setDeletedAt($now);
+                }
+            }
+
+            // 2. SOFT DELETE DEL PADRE: Marcamos el documento clínico como eliminado
+            $document->setDeletedAt($now);
+
+            // Confirmamos los cambios de forma atómica en PostgreSQL
+            $entityManager->flush();
+        } catch (\Exception $e) {
             
         } catch (\Throwable $e) {
             return new JsonResponse([
                 'error' => 'Error al eliminar el documento: ' . $e->getMessage()
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+
+        return new JsonResponse(['status' => 'success', 'message' => 'Documento y fragmentos eliminados'], Response::HTTP_OK);
     }
 }

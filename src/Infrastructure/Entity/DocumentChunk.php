@@ -36,6 +36,10 @@ class DocumentChunk
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $deletedAt = null;
 
+    #[ORM\ManyToOne(targetEntity: ClinicalDocument::class, inversedBy: 'chunks')]
+    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
+    private ?ClinicalDocument $clinicalDocument = null;
+
     public function __construct()
     {
         $this->dietaryPlans = new ArrayCollection();
@@ -117,6 +121,17 @@ class DocumentChunk
             // $dietaryPlan->removeDocumentChunk($this);
         }
 
+        return $this;
+    }
+
+    public function getClinicalDocument(): ?ClinicalDocument
+    {
+        return $this->clinicalDocument;
+    }
+
+    public function setClinicalDocument(?ClinicalDocument $clinicalDocument): self
+    {
+        $this->clinicalDocument = $clinicalDocument;
         return $this;
     }
 }
