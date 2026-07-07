@@ -38,11 +38,29 @@ readonly class GenerateClinicalDietUseCase
             throw new \InvalidArgumentException("Paciente no localizado.");
         }
 
-        // 2. Vectorizar la petición del frontend
+        // --- NUEVO: EXTRACCIÓN DEL PERFIL CLÍNICO ---
+        $allergies = $patient->getAllergies()->map(fn($a) => $a->getName())->toArray();
+        $allergiesStr = empty($allergies) ? "Ninguna conocida" : implode(', ', $allergies);
+        
+        $pathologies = $patient->getPathologies() ?: "Ninguna registrada";
+        
+        // Obtenemos la última medición biométrica si existe
+        $latestMeasurement = $patient->getMeasurements()->last();
+        $biometricsStr = "No hay mediciones registradas.";
+        if ($latestMeasurement) {
+            $biometricsStr = sprintf(
+                "Peso: %s kg, Altura: %s cm, Grasa: %s%%", 
+                $latestMeasurement->getWeight() ?? 'N/A',
+                $latestMeasurement->getHeight() ?? 'N/A',
+                $latestMeasurement->getBodyFatPercentage() ?? 'N/A'
+            );
+        }
+
+        // 2. Vectorizar la petición
         $queryVectorArray = $this->embeddingGenerator->generateEmbedding($query);
         $queryVectorString = json_encode($queryVectorArray); 
 
-        // 3. Recuperar fragmentos desde la base de conocimiento vectorial (RAG)
+        // 3. Recuperar fragmentos (RAG)
         $chunkEntities = $this->documentChunkRepository->findSimilarChunkEntities($queryVectorString, 4);
 
         $contextTexts = [];
@@ -51,19 +69,33 @@ readonly class GenerateClinicalDietUseCase
         }
         $contextString = implode("\n\n---\n\n", $contextTexts);
 
-        // 4. Prompting
-        $systemPrompt = "Eres un asistente clínico experto en nutrición. Utiliza EXCLUSIVAMENTE el siguiente contexto médico indexado para fundamentar tu propuesta nutricional. \n\nContexto Médico:\n" . $contextString;
+        // 4. PROMPTING CLÍNICO DEFENSIVO
+        $systemPrompt = <<<PROMPT
+Eres un asistente clínico experto en nutrición. Utiliza EXCLUSIVAMENTE el siguiente contexto médico indexado para fundamentar tu propuesta.
+
+CONTEXTO MÉDICO (Base de Conocimiento):
+$contextString
+
+PERFIL DEL PACIENTE:
+- Alergias/Intolerancias: $allergiesStr
+- Patologías Clínicas: $pathologies
+- Biometría Actual: $biometricsStr
+- Objetivo Kcal Diarias: $kcal kcal
+
+REGLA CRÍTICA DE SEGURIDAD: 
+Bajo NINGUNA circunstancia puedes incluir alimentos que contengan o deriven de los alérgenos mencionados. 
+PROMPT;
         
-        // 5. Inferencia (El LLM ahora devuelve un JSON estricto)
+        // 5. Inferencia (Structured Outputs)
         $dietContent = $this->llmInference->generateText($systemPrompt, $query);
         
-        // 6. Decodificar la salida estructurada
+        // 6. Decodificar JSON
         $dietData = json_decode($dietContent, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
             throw new \RuntimeException("La IA no devolvió un JSON válido. Error: " . json_last_error_msg());
         }
 
-        // 7. HIDRATACIÓN DEL DOMINIO B2B (Instanciamos la red de entidades)
+        // 7. HIDRATACIÓN Y VALIDACIÓN PROGRAMÁTICA DE SEGURIDAD
         $dietaryPlan = new DietaryPlan();
         $dietaryPlan->setPatient($patient);
         $dietaryPlan->setName("Plan Nutricional RAG - " . ($dietData['totalKcal'] ?? $kcal) . " kcal");
@@ -78,13 +110,11 @@ readonly class GenerateClinicalDietUseCase
 
         $foodRepo = $this->em->getRepository(FoodItem::class);
 
-        // Iteramos los Días
         foreach ($dietData['days'] as $dayData) {
             $dietDay = new DietDay();
             $dietDay->setDayNumber($dayData['dayNumber']);
             $dietaryPlan->addDietDay($dietDay);
 
-            // Iteramos las Comidas
             foreach ($dayData['meals'] as $mealData) {
                 $meal = new Meal();
                 $meal->setName($mealData['type']);
@@ -95,11 +125,21 @@ readonly class GenerateClinicalDietUseCase
                 }
                 $dietDay->addMeal($meal);
 
-                // Iteramos los Alimentos
                 foreach ($mealData['items'] as $itemData) {
                     $foodName = $itemData['foodName'] ?? 'Alimento Desconocido';
                     
-                    // Comprobamos si el alimento ya existe en la base de datos de la clínica
+                    // --- NUEVO: FILTRO PROGRAMÁTICO ANTI-ALERGIAS ---
+                    foreach ($allergies as $allergy) {
+                        // Búsqueda insensible a mayúsculas/minúsculas
+                        if (stripos($foodName, $allergy) !== false) {
+                            throw new \RuntimeException(sprintf(
+                                "ALERTA DE SEGURIDAD CLÍNICA: La IA intentó recetar '%s', lo cual entra en conflicto con la alergia del paciente a '%s'. Generación abortada.",
+                                $foodName,
+                                $allergy
+                            ));
+                        }
+                    }
+
                     $foodItem = $foodRepo->findOneBy(['name' => $foodName]);
                     if (!$foodItem) {
                         $foodItem = new FoodItem();
@@ -111,14 +151,12 @@ readonly class GenerateClinicalDietUseCase
                             'fats' => $itemData['fats'] ?? 0,
                         ]);
                         $foodItem->setCategory('Generado por IA');
-                        $this->em->persist($foodItem); // Este persist manual es obligatorio porque no hay cascada desde MealItem
+                        $this->em->persist($foodItem); 
                     }
 
                     $mealItem = new MealItem();
                     $mealItem->setFoodItem($foodItem);
 
-                    // Separamos inteligentemente el string "150g" o "1 taza" que devuelve OpenAI
-                    // Regex captura el número y luego la unidad
                     preg_match('/([\d.,]+)\s*(.*)/', $itemData['quantity'] ?? '1 ud', $matches);
                     $qty = isset($matches[1]) ? (float) str_replace(',', '.', $matches[1]) : 1.0;
                     $unit = !empty($matches[2]) ? $matches[2] : 'ud';
@@ -131,11 +169,9 @@ readonly class GenerateClinicalDietUseCase
             }
         }
 
-        // 8. Persistencia Atómica (Guarda Días, Comidas y Elementos por cascada)
         $this->em->persist($dietaryPlan);
         $this->em->flush();
 
-        // Devolvemos el JSON crudo al frontend para que pueda renderizarlo o parsearlo inmediatamente
         return $dietContent; 
     }
 }
