@@ -36,7 +36,7 @@ abstract class AuthenticatedApiTestCase extends WebTestCase
             $user->setRoles($roles);
 
             /** @var UserPasswordHasherInterface $passwordHasher */
-            $passwordHasher = self::getContainer()->get(UserPasswordHasherInterface::class);
+            $passwordHasher = $client->getContainer()->get(UserPasswordHasherInterface::class);
             $user->setPassword($passwordHasher->hashPassword($user, $password));
 
             // Si el usuario es un nutricionista, creamos y asociamos su perfil profesional

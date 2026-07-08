@@ -18,16 +18,23 @@ class PatientControllerTest extends AuthenticatedApiTestCase
         // Crear un paciente asociado a este nutricionista
         $patient = new Patient();
         $patient->setName('John Doe');
+        $patient->setEmail('john.doe@test.com');
+        $patient->setGender('Masculino');
         $patient->setMedicalHistoryNumber('PAC-TEST-123');
+        
+        // AÑADE ESTA LÍNEA (Usa una fecha válida para el test)
+        $patient->setBirthDate(new \DateTimeImmutable('1990-01-01')); 
 
-        // Gracias al cambio en AuthenticatedApiTestCase, el usuario ya tiene su perfil.
-        // Lo recuperamos y lo asignamos al nuevo paciente.
+        // La propiedad 'active_status' es obligatoria en la base de datos.
+        $patient->setActiveStatus(true);
+
         $profile = $user->getNutritionistProfile();
         $this->assertNotNull($profile, 'El perfil del nutricionista no debería ser nulo.');
         $patient->setNutritionistProfile($profile);
 
         $this->em->persist($patient);
         $this->em->flush();
+
 
         $client->request('GET', '/api/patients');
         $this->assertResponseIsSuccessful();
@@ -50,6 +57,8 @@ class PatientControllerTest extends AuthenticatedApiTestCase
             json_encode([
                 'name' => 'Jane Smith',
                 'email' => 'jane.smith@test.com',
+                'gender' => 'Femenino',
+                'birth_date' => '1990-05-15', // AÑADE ESTO TAMBIÉN
                 'age' => 34,
                 'weight' => 65.5,
                 'height' => 170

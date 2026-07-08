@@ -5,66 +5,84 @@ declare(strict_types=1);
 namespace App\Tests;
 
 use App\Application\UseCase\GenerateClinicalDietUseCase;
-use App\Domain\Repository\DocumentChunkRepositoryInterface;
-use App\Domain\Service\RagEngineInterface;
+use App\Domain\Service\EmbeddingGeneratorInterface;
+use App\Domain\Service\LlmInferenceInterface;
+use App\Infrastructure\Repository\DocumentChunkRepository;
+use App\Infrastructure\Repository\PatientRepository;
 use App\Infrastructure\Entity\Patient;
+use App\Infrastructure\Entity\DocumentChunk;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\EntityRepository;
+use Doctrine\Common\Collections\ArrayCollection;
 use PHPUnit\Framework\TestCase;
 
 class GenerateClinicalDietUseCaseTest extends TestCase
 {
+    private PatientRepository $patientRepository;
+    private DocumentChunkRepository $documentChunkRepository;
+    private EmbeddingGeneratorInterface $embeddingGenerator;
+    private LlmInferenceInterface $llmInference;
     private EntityManagerInterface $entityManager;
-    private DocumentChunkRepositoryInterface $chunkRepository;
-    private RagEngineInterface $ragEngine;
     private GenerateClinicalDietUseCase $useCase;
 
     protected function setUp(): void
     {
-        // Creamos Mocks para las dependencias (puertos de la arquitectura)
+        $this->patientRepository = $this->createMock(PatientRepository::class);
+        $this->documentChunkRepository = $this->createMock(DocumentChunkRepository::class);
+        $this->embeddingGenerator = $this->createMock(EmbeddingGeneratorInterface::class);
+        $this->llmInference = $this->createMock(LlmInferenceInterface::class);
         $this->entityManager = $this->createMock(EntityManagerInterface::class);
-        $this->chunkRepository = $this->createMock(DocumentChunkRepositoryInterface::class);
-        $this->ragEngine = $this->createMock(RagEngineInterface::class);
 
-        // Asumimos que el caso de uso depende de EntityManagerInterface porque no parece haber un PatientRepository personalizado.
         $this->useCase = new GenerateClinicalDietUseCase(
-            $this->entityManager,
-            $this->chunkRepository,
-            $this->ragEngine
+            $this->patientRepository,
+            $this->documentChunkRepository,
+            $this->embeddingGenerator,
+            $this->llmInference,
+            $this->entityManager
         );
     }
 
-    public function testExecuteBuildsCorrectPromptAndReturnsRagResult(): void
+    public function testExecuteBuildsCorrectPromptAndReturnsDietContent(): void
     {
         $patientId = 'patient-uuid-123';
-        $query = 'Dieta de definición para varón de 30 años';
-        $kcal = 2200;
+        $query = 'Dieta alta en proteínas';
+        $kcal = 2000;
+        $startDate = new \DateTimeImmutable();
+        $endDate = new \DateTimeImmutable('+7 days');
 
-        // 1. Configuramos los Mocks
-        $patient = new Patient();
-        $patient->setName('Test Patient');
-        // ... configurar más datos del paciente
+        // 1. Configurar Mock de Paciente
+        $patient = $this->createMock(Patient::class);
+        $patient->method('getAllergies')->willReturn(new ArrayCollection());
+        $patient->method('getPathologies')->willReturn('Ninguna registrada');
+        $patient->method('getMeasurements')->willReturn(new ArrayCollection());
 
-        $patientRepositoryMock = $this->createMock(EntityRepository::class);
-        $patientRepositoryMock->expects($this->once())->method('find')->with($patientId)->willReturn($patient);
-        $this->entityManager->expects($this->once())->method('getRepository')->with(Patient::class)->willReturn($patientRepositoryMock);
+        $this->patientRepository->expects($this->once())
+            ->method('find')
+            ->with($patientId)
+            ->willReturn($patient);
 
-        $this->chunkRepository->method('findSimilarText')->willReturn(['Contexto de estudio 1.', 'Contexto de estudio 2.']);
+        // 2. Configurar Mocks del RAG
+        $this->embeddingGenerator->expects($this->once())
+            ->method('generateEmbedding')
+            ->with($query)
+            ->willReturn([0.1, 0.2, 0.3]);
 
-        $expectedRagResult = '{"plan": "generado"}';
-        $this->ragEngine->expects($this->once())
-            ->method('generateDiet')
-            // Verificamos que el prompt final que se envía al LLM contiene las piezas clave:
-            // los datos del paciente y el contexto recuperado de la base de datos vectorial.
-            // El método 'with' espera un solo argumento de tipo constraint si el método mockeado tiene un solo parámetro.
-            // Usamos logicalAnd para combinar múltiples aserciones sobre ese único argumento.
-            ->with($this->logicalAnd($this->stringContains('Test Patient'), $this->stringContains('Contexto de estudio 1')))
-            ->willReturn($expectedRagResult);
+        $chunkMock = $this->createMock(DocumentChunk::class);
+        $chunkMock->method('getContent')->willReturn('Guía médica sobre proteínas.');
 
-        // 2. Ejecutamos el Caso de Uso
-        $result = $this->useCase->execute($patientId, $query, $kcal, new \DateTimeImmutable(), new \DateTimeImmutable());
+        $this->documentChunkRepository->expects($this->once())
+            ->method('findSimilarChunkEntities')
+            ->willReturn([$chunkMock]);
 
-        // 3. Verificamos el resultado
-        $this->assertSame($expectedRagResult, $result);
+        // 3. Configurar Mock del LLM
+        $expectedLlmJson = '{"totalKcal": 2000, "observations": "Dieta alta en proteínas", "days": []}';
+        $this->llmInference->expects($this->once())
+            ->method('generateText')
+            ->willReturn($expectedLlmJson);
+
+        // 4. Ejecutar el Caso de Uso
+        $result = $this->useCase->execute($patientId, $query, $kcal, $startDate, $endDate);
+
+        // 5. Verificar Resultado
+        $this->assertSame($expectedLlmJson, $result);
     }
 }

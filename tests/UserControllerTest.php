@@ -44,19 +44,27 @@ class UserControllerTest extends AuthenticatedApiTestCase
 
     public function testAdminCanListAllUsers(): void
     {
-        // Creamos un usuario normal primero
-        $this->createAuthenticatedClient('some.user@test.com', 'password', ['ROLE_USER']);
+        // Creamos un cliente autenticado como administrador.
+        // El helper createAuthenticatedClient ya nos da acceso a su EntityManager ($this->em).
+        $adminClient = $this->createAuthenticatedClient('admin-lister@test.com', 'password', ['ROLE_ADMIN']);
 
-        // Y ahora un admin para hacer la petición
-        $adminClient = $this->createAuthenticatedClient('admin@test.com', 'password', ['ROLE_ADMIN']);
+        // Para asegurar que la lista no está vacía, creamos un segundo usuario directamente
+        // en la base de datos usando el EntityManager del cliente actual.
+        $passwordHasher = $adminClient->getContainer()->get(\Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface::class);
+        $regularUser = new User();
+        $regularUser->setEmail('another.user@test.com');
+        $regularUser->setRoles(['ROLE_USER']);
+        $regularUser->setPassword($passwordHasher->hashPassword($regularUser, 'password'));
+        $this->em->persist($regularUser);
+        $this->em->flush();
 
+        // Realizamos la petición para listar usuarios.
         $adminClient->request('GET', '/api/users');
         $this->assertResponseIsSuccessful();
 
         $response = json_decode($adminClient->getResponse()->getContent(), true);
         $this->assertIsArray($response['data']);
-        // El admin no se lista a sí mismo, por eso esperamos al menos 1 (el usuario normal)
-        $this->assertGreaterThanOrEqual(1, count($response['data']));
+        $this->assertGreaterThanOrEqual(1, count($response['data']), 'El administrador debería poder ver al menos un usuario en la lista.');
     }
 
     public function testRegularUserCannotListUsers(): void
