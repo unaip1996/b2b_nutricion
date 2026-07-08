@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace App\Infrastructure\Controller;
 
 use App\Application\UseCase\GenerateClinicalDietUseCase;
+use App\Infrastructure\Entity\DietDay;
 use App\Infrastructure\Entity\DietaryPlan;
+use App\Infrastructure\Entity\FoodItem;
+use App\Infrastructure\Entity\Meal;
+use App\Infrastructure\Entity\MealItem;
 use Doctrine\ORM\EntityManagerInterface;
 use OpenApi\Attributes as OA;
 use Psr\Log\LoggerInterface;
@@ -13,6 +17,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Throwable;
 
 #[OA\Tag(name: 'Dietas y Motor RAG', description: 'Endpoints para la generación de dietas mediante Inteligencia Artificial y gestión de pautas')]
@@ -103,6 +108,7 @@ readonly class DietController
                         type: 'object',
                         properties: [
                             new OA\Property(property: 'id', type: 'string', example: '123e4567-e89b-12d3-a456-426614174000'),
+                            new OA\Property(property: 'name', type: 'string'),
                             new OA\Property(property: 'createdAt', type: 'string', format: 'date'),
                             new OA\Property(property: 'kcal', type: 'integer'),
                             new OA\Property(property: 'status', type: 'string', example: 'Activo')
@@ -136,6 +142,7 @@ readonly class DietController
 
                 return [
                     'id' => $plan->getId()->toRfc4122(),
+                    'name' => $plan->getName() ?? '',
                     'createdAt' => $plan->getStartDate() ? $plan->getStartDate()->format('Y-m-d') : date('Y-m-d'),
                     'kcal' => $plan->getKcal() ?? 2000, 
                     'status' => $status, 
@@ -146,6 +153,139 @@ readonly class DietController
 
         } catch (\Throwable $e) {
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/api/diets/{id}', name: 'api_diet_detail', methods: ['GET'])]
+    #[IsGranted('ROLE_USER')]
+    #[OA\Get(summary: 'Obtiene el detalle completo de una pauta nutricional para su edición')]
+    #[OA\Parameter(name: 'id', description: 'UUID de la dieta', in: 'path', required: true, schema: new OA\Schema(type: 'string'))]
+    #[OA\Response(response: 200, description: 'Datos detallados de la dieta')]
+    #[OA\Response(response: 404, description: 'Pauta nutricional no encontrada')]
+    public function getDietDetail(string $id, EntityManagerInterface $em): JsonResponse
+    {
+        try {
+            $diet = $em->getRepository(DietaryPlan::class)->find($id);
+
+            if (!$diet) {
+                return new JsonResponse(['error' => 'Pauta nutricional no encontrada.'], Response::HTTP_NOT_FOUND);
+            }
+
+            $daysData = [];
+            foreach ($diet->getDietDays() as $day) {
+                $mealsData = [];
+                foreach ($day->getMeals() as $meal) {
+                    $itemsData = [];
+                    foreach ($meal->getMealItems() as $item) {
+                        $itemsData[] = [
+                            'id' => $item->getId()->toRfc4122(),
+                            'foodItemId' => $item->getFoodItem()->getId()->toRfc4122(),
+                            'foodName' => $item->getFoodItem()->getName(),
+                            'quantity' => $item->getQuantity(),
+                            'unit' => $item->getUnit(),
+                        ];
+                    }
+                    $mealsData[] = [
+                        'id' => $meal->getId()->toRfc4122(),
+                        'name' => $meal->getName(),
+                        'mealTime' => $meal->getMealTime() ? $meal->getMealTime()->format('H:i') : '00:00',
+                        'items' => $itemsData,
+                    ];
+                }
+                $daysData[] = [
+                    'id' => $day->getId()->toRfc4122(),
+                    'dayNumber' => $day->getDayNumber(),
+                    'meals' => $mealsData,
+                ];
+            }
+
+            $data = [
+                'id' => $diet->getId()->toRfc4122(),
+                'name' => $diet->getName(),
+                'kcal' => $diet->getKcal(),
+                'startDate' => $diet->getStartDate() ? $diet->getStartDate()->format('Y-m-d') : null,
+                'endDate' => $diet->getEndDate() ? $diet->getEndDate()->format('Y-m-d') : null,
+                'observations' => $diet->getObservations(),
+                'days' => $daysData,
+                'patient' => $diet->getPatient() ? [
+                    'name' => $diet->getPatient()->getName()
+                ] : null,
+            ];
+
+            return new JsonResponse(['data' => $data], Response::HTTP_OK);
+
+        } catch (\Throwable $e) {
+            $this->logger->error('Error fetching diet detail: ' . $e->getMessage());
+            return new JsonResponse(['error' => 'Error al obtener el detalle de la dieta: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/api/diets/{id}', name: 'api_diet_update', methods: ['PUT'])]
+    #[IsGranted('ROLE_USER')]
+    #[OA\Put(summary: 'Actualiza una pauta nutricional existente')]
+    #[OA\Parameter(name: 'id', description: 'UUID de la dieta a modificar', in: 'path', required: true, schema: new OA\Schema(type: 'string'))]
+    #[OA\RequestBody(description: 'Objeto completo de la dieta con las modificaciones', required: true)]
+    #[OA\Response(response: 200, description: 'Pauta actualizada con éxito')]
+    #[OA\Response(response: 404, description: 'Pauta nutricional no encontrada')]
+    public function updateDiet(string $id, Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        try {
+            $diet = $em->getRepository(DietaryPlan::class)->find($id);
+
+            if (!$diet) {
+                return new JsonResponse(['error' => 'Pauta nutricional no encontrada.'], Response::HTTP_NOT_FOUND);
+            }
+
+            $data = json_decode($request->getContent(), true);
+
+            $diet->setKcal((int)($data['kcal'] ?? $diet->getKcal()));
+            $diet->setObservations($data['observations'] ?? $diet->getObservations());
+            if (isset($data['startDate'])) {
+                $diet->setStartDate(new \DateTimeImmutable($data['startDate']));
+            }
+            if (isset($data['endDate'])) {
+                $diet->setEndDate(new \DateTimeImmutable($data['endDate']));
+            }
+            if (isset($data['name'])) {
+                $diet->setName($data['name']);
+            }
+
+            $diet->getDietDays()->clear();
+            $em->flush(); 
+
+            $foodRepo = $em->getRepository(FoodItem::class);
+
+            foreach ($data['days'] as $dayData) {
+                $dietDay = new DietDay();
+                $dietDay->setDayNumber($dayData['dayNumber']);
+                $diet->addDietDay($dietDay);
+
+                foreach ($dayData['meals'] as $mealData) {
+                    $meal = new Meal();
+                    $meal->setName($mealData['name']);
+                    $meal->setMealTime(isset($mealData['mealTime']) ? new \DateTimeImmutable($mealData['mealTime']) : null);
+                    $dietDay->addMeal($meal);
+
+                    foreach ($mealData['items'] as $itemData) {
+                        $foodName = $itemData['foodName'] ?? 'Alimento Desconocido';
+                        $foodItem = $foodRepo->findOneBy(['name' => $foodName]) ?? (new FoodItem())->setName($foodName)->setCategory('Editado Manualmente');
+                        $em->persist($foodItem);
+
+                        $mealItem = new MealItem();
+                        $mealItem->setFoodItem($foodItem)->setQuantity((float)($itemData['quantity'] ?? 1.0))->setUnit($itemData['unit'] ?? 'ud');
+                        $meal->addMealItem($mealItem);
+                    }
+                }
+            }
+
+            $em->persist($diet);
+            $em->flush();
+
+            return new JsonResponse(['message' => 'Pauta actualizada con éxito.'], Response::HTTP_OK);
+
+        } catch (\Throwable $e) {
+            $this->logger->error('Error updating diet: ' . $e->getMessage() . ' en ' . $e->getFile() . ':' . $e->getLine());
+            return new JsonResponse(['error' => 'Error al actualizar la pauta: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
