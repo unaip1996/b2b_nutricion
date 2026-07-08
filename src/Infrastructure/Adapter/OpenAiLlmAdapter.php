@@ -8,39 +8,28 @@ use App\Domain\Service\LlmInferenceInterface;
 use RuntimeException;
 use Symfony\Contracts\HttpClient\Exception\HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Throwable;
 
 readonly class OpenAiLlmAdapter implements LlmInferenceInterface
 {
     public function __construct(
         private HttpClientInterface $httpClient,
+        #[Autowire(env: 'OPENAI_API_KEY')]
         private string $apiKey,
     ) {
     }
 
-    public function generateResponse(string $prompt, array $context): string
+    public function generateText(string $systemPrompt, string $userPrompt): string 
     {
-        // 🛠️ MODO DESARROLLO: Descomenta este método para probar de forma local y gratuita
-        return $this->generateSimulatedResponse($prompt, $context);
-
-        /*
-        // 🚀 MODO PRODUCCIÓN: Descomenta este bloque cuando la cuenta de OpenAI tenga saldo
-        $joinedContext = implode("\n\n", $context);
-
-        $systemPrompt = "Eres un asistente clínico nutricional altamente cualificado. "
-            . "Tu objetivo es proporcionar recomendaciones y generar dietas basándote ÚNICA Y EXCLUSIVAMENTE "
-            . "en el contexto médico y biométrico proporcionado a continuación. "
-            . "Bajo ninguna circunstancia debes inventar información ni utilizar conocimientos externos. "
-            . "Si el contexto no contiene información suficiente para responder a la consulta de forma segura, indícalo claramente.\n\n"
-            . "CONTEXTO RECUPERADO:\n"
-            . $joinedContext;
-
         try {
             $response = $this->httpClient->request('POST', 'https://api.openai.com/v1/chat/completions', [
                 'headers' => [
                     'Authorization' => 'Bearer ' . $this->apiKey,
                     'Content-Type'  => 'application/json',
                 ],
+                // Aumentamos el timeout a 120 segundos para dar tiempo a OpenAI a generar dietas complejas
+                'timeout' => 120,
                 'json' => [
                     'model'       => 'gpt-4o-mini',
                     'messages'    => [
@@ -50,10 +39,80 @@ readonly class OpenAiLlmAdapter implements LlmInferenceInterface
                         ],
                         [
                             'role'    => 'user',
-                            'content' => $prompt,
+                            'content' => $userPrompt,
                         ],
                     ],
                     'temperature' => 0.0,
+
+                    // Aumentamos el límite de tokens para permitir dietas completas de 7 días
+                    'max_tokens' => 8192,
+                    
+                    // Forzamos la salida estructurada para hidratar las entidades del dominio
+                    'response_format' => [
+                        'type' => 'json_schema',
+                        'json_schema' => [
+                            'name' => 'dietary_plan_schema',
+                            'strict' => true,
+                            'schema' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'observations' => [
+                                        'type' => 'string',
+                                        'description' => 'Justificación clínica de la dieta basada en los PDFs.'
+                                    ],
+                                    'totalKcal' => [
+                                        'type' => 'integer',
+                                        'description' => 'Calorías totales diarias estimadas promedio.'
+                                    ],
+                                    'days' => [
+                                        'type' => 'array',
+                                        'description' => 'Los días que componen la pauta dietética (ej. 1 al 7).',
+                                        'items' => [
+                                            'type' => 'object',
+                                            'properties' => [
+                                                'dayNumber' => ['type' => 'integer'],
+                                                'meals' => [
+                                                    'type' => 'array',
+                                                    'items' => [
+                                                        'type' => 'object',
+                                                        'properties' => [
+                                                            'type' => [
+                                                                'type' => 'string',
+                                                                'description' => 'Ej: Desayuno, Media Mañana, Comida, Merienda, Cena'
+                                                            ],
+                                                            'time' => ['type' => 'string', 'description' => 'Hora recomendada, ej: 08:30'],
+                                                            'items' => [
+                                                                'type' => 'array',
+                                                                'items' => [
+                                                                    'type' => 'object',
+                                                                    'properties' => [
+                                                                        'foodName' => ['type' => 'string'],
+                                                                        'quantity' => ['type' => 'string', 'description' => 'Ej: 150g, 1 taza'],
+                                                                        'kcal' => ['type' => 'integer'],
+                                                                        'proteins' => ['type' => 'number'],
+                                                                        'carbs' => ['type' => 'number'],
+                                                                        'fats' => ['type' => 'number']
+                                                                    ],
+                                                                    'required' => ['foodName', 'quantity', 'kcal', 'proteins', 'carbs', 'fats'],
+                                                                    'additionalProperties' => false
+                                                                ]
+                                                            ]
+                                                        ],
+                                                        'required' => ['type', 'time', 'items'],
+                                                        'additionalProperties' => false
+                                                    ]
+                                                ]
+                                            ],
+                                            'required' => ['dayNumber', 'meals'],
+                                            'additionalProperties' => false
+                                        ]
+                                    ]
+                                ],
+                                'required' => ['observations', 'totalKcal', 'days'],
+                                'additionalProperties' => false
+                            ]
+                        ]
+                    ]
                 ],
             ]);
 
@@ -68,45 +127,9 @@ readonly class OpenAiLlmAdapter implements LlmInferenceInterface
 
         } catch (HttpExceptionInterface $e) {
             $errorBody = $e->getResponse()->getContent(false);
-            throw new RuntimeException(sprintf("Error de OpenAI (HTTP %d): %s", $e->getResponse()->getStatusCode(), $errorBody));
+            throw new RuntimeException(sprintf("Error de OpenAI HTTP %d: %s", $e->getResponse()->getStatusCode(), $errorBody));
         } catch (Throwable $e) {
             throw new RuntimeException('Fallo general en la infraestructura del LLM: ' . $e->getMessage(), 0, $e);
         }
-        */
-    }
-
-    /**
-     * Función de simulación para desarrollo local.
-     * Valida que el motor RAG recupera el contexto de PostgreSQL de forma matemática.
-     */
-    private function generateSimulatedResponse(string $prompt, array $context): string
-    {
-        $joinedContext = implode("\n\n", $context);
-
-        $output = "=== RESPUESTA GENERADA POR MOTOR RAG (MODO SIMULACIÓN DESARROLLO) ===\n\n";
-        $output .= "🔹 CONSULTA CLÍNICA RECIBIDA:\n\"" . $prompt . "\"\n\n";
-        $output .= "🗂️ CONTEXTO RE REAL EXTRAÍDO DE POSTGRESQL (PGVECTOR):\n";
-        
-        if (empty($context)) {
-            $output .= "⚠️ [ALERTA] No se han recuperado fragmentos de la base de datos vectorial.\n\n";
-        } else {
-            $output .= sprintf(" Se han recuperado %d fragmentos médicos relevantes de la tabla document_chunks.\n", count($context));
-            $output .= "Muestra del contenido indexado en base de datos:\n";
-            $output .= "--------------------------------------------------------------------------------\n";
-            $output .= substr($joinedContext, 0, 450) . "...\n";
-            $output .= "--------------------------------------------------------------------------------\n\n";
-        }
-        
-        $output .= "📋 PROPUESTA DIETÉTICA BASADA EN LA EVIDENCIA RECOLECTADA:\n";
-        $output .= "1. Restricción absoluta de lácteos tradicionales por déficit de enzima lactasa en mucosa intestinal.\n";
-        $output .= "2. Cobertura de superávit calórico para hipertrofia mediante la Opción A del consenso clínico: Porridge de avena (60-80g) cocido con bebida vegetal (almendras/soja), enriquecido con un cacito (30g) de proteína vegetal aislado, crema de cacahuete y un plátano.\n";
-        $output .= "3. Alternativa sólida: Revuelto de 2 huevos enteros y claras pasteurizadas sobre pan de masa madre y aguacate.";
-
-        return $output;
-    }
-
-    public function generateText(string $systemPrompt, string $userPrompt): string {
-        // Simulacro para no gastar saldo de la API
-        return "Este es un plan dietético generado por la IA simulada.\n\nBasado en la petición y en el expediente del paciente, aquí iría el reparto de macronutrientes y las comidas extraídas de las guías de la base de datos vectorial.";
     }
 }

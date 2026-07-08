@@ -16,6 +16,12 @@ security:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
 
+        # 🚨 NUEVO FIREWALL: Apagamos la seguridad para la ruta de la documentación
+        # Debe ir siempre ANTES del firewall "api"
+        api_doc:
+            pattern: ^/api/doc
+            security: false
+
         login:
             pattern: ^/api/login_check
             stateless: true
@@ -35,8 +41,14 @@ security:
 
     # Note: Only the *first* matching rule is applied
     access_control:
+        # 1. Excepciones públicas (Debe ir siempre arriba)
         - { path: ^/api/login_check, roles: PUBLIC_ACCESS }
+        - { path: ^/api/doc, roles: PUBLIC_ACCESS }
+        
+        # 2. Permitir peticiones CORS Preflight (OPTIONS)
         - { path: ^/api, roles: PUBLIC_ACCESS, methods: [OPTIONS] }
+        
+        # 3. Proteger todo el resto de la API (Va al final)
         - { path: ^/api,       roles: IS_AUTHENTICATED_FULLY }
 
 when@test:

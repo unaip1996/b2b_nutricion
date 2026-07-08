@@ -10,8 +10,10 @@ import {
     ChevronDown,
     Sparkles,
     Calendar,
-    Flame
+    Flame,
+    Info
 } from "lucide-react";
+import { GeneratedDietDisplay } from "@/components/rag/generated-diet-display";
 
 interface PatientSelectData {
     id: string;
@@ -85,32 +87,23 @@ function RagContent() {
         loadPatients();
     }, [urlPatientId]);
 
-    // Sincronizar plantilla de prompt dinámicamente cuando cambian las kcal
+    // Plantilla base para directrices manuales (El contexto clínico se inyecta en el Backend)
     useEffect(() => {
         if (activePatient) {
-            const template = `Diseñar una pauta nutricional clínica para ${activePatient.name}.
-
-Contexto Biométrico:
-- ${activePatient.metricsSummary}
-
-Directrices Operativas:
-- Objetivo calórico asignado en sistema: ${kcal} kcal
-- Distribución de macronutrientes: [EJ: 40% HC, 30% PROT, 30% GRASAS]
-- Restricciones absolutas: [INDICAR ALÉRGENOS O TEXTURAS]
-- Número de ingestas: [INDICAR CANTIDAD]
-
-Instrucción de Inferencia:
-Cruzar estos parámetros con las guías clínicas indexadas para emitir un protocolo seguro y justificado.`;
+            const template = `- Distribución de macronutrientes: [EJ: 40% HC, 30% PROT, 30% GRASAS]
+- Número de ingestas: [EJ: 4 o 5 comidas]
+- Enfoque / Preferencias: [EJ: Priorizar recetas de alta saciedad, preparación rápida, etc.]`;
             setQuery(template);
         } else {
             setQuery("");
         }
-    }, [activePatient, kcal]);
+    }, [activePatient]); // Hemos quitado 'kcal' de las dependencias
 
     const handlePatientChange = (id: string) => {
         setSelectedPatientId(id);
         const target = patients.find((p) => p.id === id) || null;
         setActivePatient(target);
+        // Si cambiamos de paciente, reseteamos la respuesta para permitir generar de nuevo
         setResponse(null);
     };
 
@@ -141,6 +134,7 @@ Cruzar estos parámetros con las guías clínicas indexadas para emitir un proto
             if (res.ok) {
                 const data = await res.json();
                 setResponse(data.data.dietary_proposal);
+            console.log("Respuesta completa del backend:", data);
             } else {
                 const errorData = await res.json();
                 alert(`Error: ${errorData.error || "Error en la inferencia del motor RAG."}`);
@@ -153,8 +147,8 @@ Cruzar estos parámetros con las guías clínicas indexadas para emitir un proto
     };
 
     return (
-        <div className="mx-auto max-w-7xl">
-            <header className="mb-8">
+        <div className="mx-auto max-w-7xl h-full flex flex-col">
+            <header className="mb-6 shrink-0">
                 <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
                     Orquestador de Inferencia RAG
                 </h1>
@@ -163,12 +157,15 @@ Cruzar estos parámetros con las guías clínicas indexadas para emitir un proto
                 </p>
             </header>
 
-            <div className="grid gap-6 lg:grid-cols-2">
+            {/* lg:h-[calc(100vh-160px)] para limitar la altura total y forzar el scroll interno */}
+            <div className="grid gap-6 lg:grid-cols-2 lg:h-[calc(100vh-160px)]">
+                
                 {/* PANEL IZQUIERDO: CONFIGURACIÓN */}
-                <div className="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                {/* overflow-y-auto para que el panel izquierdo escrollee si la pantalla es muy pequeña */}
+                <div className="flex flex-col gap-5 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     
                     {/* Bloque de Expediente */}
-                    <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
+                    <div className="shrink-0 rounded-xl bg-slate-50 p-4 border border-slate-100">
                         <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
                             Expediente Clínico Destinatario
                         </label>
@@ -209,7 +206,7 @@ Cruzar estos parámetros con las guías clínicas indexadas para emitir un proto
                     </div>
 
                     {/* SECCIÓN: Métricas Estructuradas Obligatorias */}
-                    <div className="grid gap-4 sm:grid-cols-3 rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+                    <div className="shrink-0 grid gap-4 sm:grid-cols-3 rounded-xl border border-slate-100 bg-slate-50/50 p-4">
                         <div>
                             <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1">
                                 <Flame className="size-3 text-amber-500" /> Objetivo Kcal
@@ -247,8 +244,9 @@ Cruzar estos parámetros con las guías clínicas indexadas para emitir un proto
                     </div>
 
                     {/* Cuadro de texto para Directrices del Prompt */}
-                    <div className="flex-1 flex flex-col">
-                        <div className="mb-2 flex items-center justify-between">
+                    {/* Cuadro de texto para Directrices del Prompt */}
+                    <div className="flex-1 flex flex-col min-h-[250px]">
+                        <div className="mb-3 flex items-center justify-between shrink-0">
                             <label htmlFor="rag-instructions" className="block text-sm font-medium text-slate-700">
                                 Directrices de Personalización
                             </label>
@@ -256,14 +254,27 @@ Cruzar estos parámetros con las guías clínicas indexadas para emitir un proto
                                 <Sparkles className="h-3 w-3" /> Prompt Estructurado
                             </span>
                         </div>
+                        
+                        {/* Tooltip/Alert Informativo para el Nutricionista */}
+                        <div className="mb-3 flex items-start gap-2 rounded-lg bg-blue-50/60 p-3 text-xs text-blue-700 border border-blue-100/50">
+                            <Info className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" />
+                            <p>
+                                El peso, alergias, patologías y objetivo de Kcal de este paciente se inyectan en el motor clínico de forma invisible y segura.
+                            </p>
+                            <p>
+                                El proceso de generación puede tardar unos instantes.
+                            </p>
+                        </div>
+
                         <textarea
                             id="rag-instructions"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            className="w-full flex-1 min-h-[220px] resize-none rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-mono text-slate-800 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 shadow-inner"
+                            className="w-full flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-mono text-slate-800 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 shadow-inner"
                         />
                     </div>
 
+                    {/* Bloqueo del botón si ya hay 'response' y estilos de cursor */}
                     <button
                         onClick={handleExecuteInference}
                         suppressHydrationWarning={true}
@@ -273,9 +284,10 @@ Cruzar estos parámetros con las guías clínicas indexadas para emitir un proto
                             !startDate ||
                             !endDate ||
                             !kcal ||
-                            isGenerating
+                            isGenerating ||
+                            response !== null
                         }
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-slate-900/30"
+                        className="shrink-0 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-slate-900/30"
                     >
                         {isGenerating ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -283,26 +295,27 @@ Cruzar estos parámetros con las guías clínicas indexadas para emitir un proto
                             <BrainCircuit className="h-4 w-4" />
                         )}
                         {isGenerating
-                            ? "Recuperando literatura y computando..."
-                            : "Ejecutar Inferencia RAG"}
+                            ? "Recuperando conocimiento y computando..."
+                            : response
+                                ? "Dieta Generada Correctamente"
+                                : "Generar Dieta"}
                     </button>
                 </div>
 
                 {/* PANEL DERECHO: VISTA DE LA PROPUESTA */}
                 <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="border-b border-slate-100 bg-slate-50/50 p-4">
+                    <div className="border-b border-slate-100 bg-slate-50/50 p-4 shrink-0">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
                             Propuesta Estructurada del Motor Clínico
                         </h3>
                     </div>
-                    <div className="flex-1 bg-slate-50/30 p-6 text-sm text-slate-700">
+                    {/* overflow-y-auto aquí permite escrollear todo el texto generado libremente */}
+                    <div className="flex-1 overflow-y-auto bg-slate-50/30 p-6 text-sm text-slate-700">
                         {response ? (
-                            <div className="prose prose-slate prose-sm max-w-none whitespace-pre-wrap font-sans leading-relaxed">
-                                {response}
-                            </div>
+                            <GeneratedDietDisplay dietContent={response} />
                         ) : (
-                            <div className="flex h-full min-h-[400px] items-center justify-center italic text-slate-400 text-center px-8 text-balance">
-                                Define los parámetros en el prompt izquierdo y ejecuta la inferencia para iniciar la búsqueda de similitud vectorial y generar la pauta.
+                            <div className="flex h-full items-center justify-center p-8 text-center text-slate-500 italic">
+                                Selecciona los parámetros y pulsa "Generar Dieta" para comenzar.
                             </div>
                         )}
                     </div>
@@ -314,7 +327,7 @@ Cruzar estos parámetros con las guías clínicas indexadas para emitir un proto
 
 export default function RagPage() {
     return (
-        <main className="min-h-screen bg-slate-50 p-6 text-slate-900">
+        <main className="h-screen bg-slate-50 p-6 text-slate-900 overflow-hidden">
             <Suspense
                 fallback={
                     <div className="flex h-[60vh] items-center justify-center gap-2 text-slate-500">

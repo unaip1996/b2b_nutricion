@@ -1,23 +1,22 @@
 "use client";
 
-import { FileText, Database, Trash2, AlertTriangle } from "lucide-react";
+import { FileText, Database, Trash2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-interface DocumentData {
-    nombre: string;
-    tipo: string;
-    fecha: string;
-    chunks: string;
+interface ClinicalDocument {
+    id: string;
+    title: string;
+    chunksCount: number;
+    uploadedAt: string;
+    status: string;
 }
 
 export function DocumentsTable() {
-    const [documents, setDocuments] = useState<DocumentData[]>([]);
+    const [documents, setDocuments] = useState<ClinicalDocument[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Estados para el Modal de borrado
-    const [documentToDelete, setDocumentToDelete] = useState<string | null>(
-        null,
-    );
+    // Guardamos el objeto entero (o id/título) para poder mostrar el nombre en el modal pero borrar por ID
+    const [documentToDelete, setDocumentToDelete] = useState<{ id: string; title: string } | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
     const fetchDocuments = async () => {
@@ -34,7 +33,11 @@ export function DocumentsTable() {
                 },
             );
             const result = await response.json();
-            if (response.ok) setDocuments(result.data);
+            
+            // El nuevo controlador de Symfony devuelve directamente un array JSON
+            if (response.ok) {
+                setDocuments(Array.isArray(result) ? result : result.data || []);
+            }
         } catch (error) {
             console.error("Error al cargar documentos", error);
         } finally {
@@ -42,15 +45,17 @@ export function DocumentsTable() {
         }
     };
 
-    // Cargar al montar el componente y escuchar el evento de subida
+    // Cargar al montar el componente y escuchar el evento de subida (Ingesta)
     useEffect(() => {
         fetchDocuments();
 
-        const handleUpload = () => fetchDocuments();
+        const handleUpload = () => {
+            console.log("Nuevo documento ingerido, refrescando tabla...");
+            fetchDocuments();
+        };
+        
         window.addEventListener("documentUploaded", handleUpload);
-
-        return () =>
-            window.removeEventListener("documentUploaded", handleUpload);
+        return () => window.removeEventListener("documentUploaded", handleUpload);
     }, []);
 
     const handleDelete = async () => {
@@ -62,17 +67,16 @@ export function DocumentsTable() {
                 .split("; ")
                 .find((row) => row.startsWith("auth_token="))
                 ?.split("=")[1];
-            const urlSafeName = encodeURIComponent(documentToDelete);
 
-            // 🚨 VERIFICA ESTA LÍNEA: Debe apuntar a /api/knowledge-base/, NO a /api/ingest
+            // 🚨 Apuntamos al endpoint DELETE /api/knowledge-base/{id}
             const response = await fetch(
-                `http://localhost:8000/api/knowledge-base/${urlSafeName}`,
+                `http://localhost:8000/api/knowledge-base/${documentToDelete.id}`,
                 {
                     method: "DELETE",
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },
-                },
+                }
             );
 
             if (response.ok) {
@@ -87,6 +91,17 @@ export function DocumentsTable() {
         } finally {
             setIsDeleting(false);
         }
+    };
+
+    // Helper para formatear la fecha
+    const formatDate = (isoString: string) => {
+        return new Date(isoString).toLocaleDateString("es-ES", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit"
+        });
     };
 
     return (
@@ -129,42 +144,44 @@ export function DocumentsTable() {
                                         colSpan={5}
                                         className="p-8 text-center text-slate-400"
                                     >
-                                        No hay guías clínicas indexadas.
+                                        No hay guías clínicas indexadas. Sube un documento para comenzar.
                                     </td>
                                 </tr>
                             ) : (
-                                documents.map((doc, i) => (
+                                documents.map((doc) => (
                                     <tr
-                                        key={i}
+                                        key={doc.id}
                                         className="transition-colors hover:bg-slate-50/50"
                                     >
                                         <td className="p-4 font-medium text-slate-800 flex items-center gap-2">
                                             <FileText className="h-4 w-4 text-blue-500" />
-                                            {doc.nombre}
+                                            {doc.title}
                                         </td>
-                                        <td className="p-4 font-mono text-xs">
-                                            {doc.fecha}
+                                        <td className="p-4 font-mono text-xs text-slate-500">
+                                            {formatDate(doc.uploadedAt)}
                                         </td>
                                         <td className="p-4">
                                             <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
                                                 <Database className="h-3 w-3" />
-                                                {doc.chunks}
+                                                {doc.chunksCount} chunks
                                             </span>
                                         </td>
                                         <td className="p-4">
-                                            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 border border-emerald-200">
+                                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 border border-emerald-200">
+                                                <CheckCircle2 className="h-3 w-3" />
                                                 Indexado (pgvector)
                                             </span>
                                         </td>
                                         <td className="p-4 text-right">
                                             <button
                                                 onClick={() =>
-                                                    setDocumentToDelete(
-                                                        doc.nombre,
-                                                    )
+                                                    setDocumentToDelete({
+                                                        id: doc.id,
+                                                        title: doc.title,
+                                                    })
                                                 }
-                                                className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50"
-                                                title="Eliminar documento"
+                                                className="text-slate-400 hover:text-red-500 transition-colors p-1.5 rounded-lg hover:bg-red-50"
+                                                title="Eliminar documento y sus vectores"
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                             </button>
@@ -191,11 +208,9 @@ export function DocumentsTable() {
                         </div>
                         <p className="text-slate-600 text-sm mb-6 leading-relaxed">
                             Estás a punto de eliminar{" "}
-                            <strong>"{documentToDelete}"</strong>. Esto purgará
-                            todos sus fragmentos vectoriales de la base de datos
-                            y la IA dejará de tener acceso a esta literatura
-                            para generar dietas. Esta acción no se puede
-                            deshacer.
+                            <strong className="text-slate-800">"{documentToDelete.title}"</strong>. 
+                            Esto purgará todos sus fragmentos vectoriales de PostgreSQL y la IA dejará de 
+                            tener acceso a esta literatura para generar dietas. Esta acción no se puede deshacer.
                         </p>
                         <div className="flex justify-end gap-3">
                             <button
@@ -210,9 +225,7 @@ export function DocumentsTable() {
                                 disabled={isDeleting}
                                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-sm focus:ring-2 focus:ring-red-500/20 disabled:opacity-50"
                             >
-                                {isDeleting
-                                    ? "Eliminando..."
-                                    : "Sí, purgar vectores"}
+                                {isDeleting ? "Eliminando..." : "Sí, purgar vectores"}
                             </button>
                         </div>
                     </div>

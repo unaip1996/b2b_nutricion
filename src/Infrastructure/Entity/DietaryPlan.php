@@ -37,6 +37,9 @@ class DietaryPlan
     #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $kcal = null;
 
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $observations = null;
+
     #[ORM\ManyToMany(targetEntity: DocumentChunk::class, inversedBy: 'dietaryPlans')]
     #[ORM\JoinTable(name: 'dietary_plan_document_chunks')]
     private Collection $documentChunks;
@@ -178,6 +181,17 @@ class DietaryPlan
     public function setKcal(?int $kcal): self
     {
         $this->kcal = $kcal;
+        return $this;
+    }
+
+    public function getObservations(): ?string
+    {
+        return $this->observations;
+    }
+
+    public function setObservations(?string $observations): self
+    {
+        $this->observations = $observations;
         return $this;
     }
 }

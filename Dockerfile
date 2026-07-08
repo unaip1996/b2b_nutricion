@@ -1,10 +1,13 @@
 FROM php:8.4-cli
 
-# Instalamos las dependencias del sistema y los drivers de PostgreSQL
+# Instalamos PostgreSQL, Poppler (para convertir PDF a imagen) y Tesseract OCR (para extraer texto de la imagen)
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     git \
     unzip \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-spa \
     && docker-php-ext-install pdo pdo_pgsql pgsql
 
 # Instalamos Composer
