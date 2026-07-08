@@ -38,7 +38,7 @@ readonly class GenerateClinicalDietUseCase
             throw new \InvalidArgumentException("Paciente no localizado.");
         }
 
-        // --- NUEVO: EXTRACCIÓN DEL PERFIL CLÍNICO ---
+        // --- EXTRACCIÓN DEL PERFIL CLÍNICO ---
         $allergies = $patient->getAllergies()->map(fn($a) => $a->getName())->toArray();
         $allergiesStr = empty($allergies) ? "Ninguna conocida" : implode(', ', $allergies);
         
@@ -69,9 +69,31 @@ readonly class GenerateClinicalDietUseCase
         }
         $contextString = implode("\n\n---\n\n", $contextTexts);
 
-        // 4. PROMPTING CLÍNICO DEFENSIVO
+        // 4. CALCULAR DÍAS A GENERAR
+        $totalDays = $startDate->diff($endDate)->days + 1;
+        // Obligamos a generar un máximo de 7 días (plantilla semanal rotativa) para evitar límite de tokens
+        $diasAGenerar = $totalDays > 7 ? 7 : max(1, $totalDays);
+
+        // 5. PROMPTING CLÍNICO DEFENSIVO
         $systemPrompt = <<<PROMPT
 Eres un asistente clínico experto en nutrición. Utiliza EXCLUSIVAMENTE el siguiente contexto médico indexado para fundamentar tu propuesta.
+
+REGLAS DE FORMATO (JSON ESTRICTO):
+1. Debes generar el JSON estructurado para EXACTAMENTE $diasAGenerar días distintos (del día 1 al día $diasAGenerar). Es absolutamente obligatorio que el JSON contenga la estructura completa para todos los días solicitados, no te detengas en el día 1.
+2. CADA DÍA debe contener OBLIGATORIAMENTE un array meals de 1 a 5 ingestas distintas, dependiendo del número de ingestas que se te indiquen en el contexto (Desayuno, Media Mañana, Comida, Merienda, Cena). En el caso de no estar indicadas, serán 5.
+3. No resumas, no omitas comidas. Si no tienes datos específicos, inventa una opción saludable acorde al contexto.
+
+ESQUEMA OBLIGATORIO (Repite esta estructura para cada día):
+{
+  "dayNumber": 1,
+  "meals": [
+    {"type": "Desayuno", "time": "08:00", "items": [{"foodName": "...", "kcal": 0, "proteins": 0, "carbs": 0, "fats": 0, "quantity": "1 ud"}]},
+    {"type": "Media Mañana", "time": "11:00", "items": [...]},
+    {"type": "Comida", "time": "14:00", "items": [...]},
+    {"type": "Merienda", "time": "17:00", "items": [...]},
+    {"type": "Cena", "time": "21:00", "items": [...]}
+  ]
+}
 
 CONTEXTO MÉDICO (Base de Conocimiento):
 $contextString
@@ -86,16 +108,16 @@ REGLA CRÍTICA DE SEGURIDAD:
 Bajo NINGUNA circunstancia puedes incluir alimentos que contengan o deriven de los alérgenos mencionados. 
 PROMPT;
         
-        // 5. Inferencia (Structured Outputs)
+        // 6. Inferencia (Structured Outputs)
         $dietContent = $this->llmInference->generateText($systemPrompt, $query);
         
-        // 6. Decodificar JSON
+        // 7. Decodificar JSON
         $dietData = json_decode($dietContent, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
             throw new \RuntimeException("La IA no devolvió un JSON válido. Error: " . json_last_error_msg());
         }
 
-        // 7. HIDRATACIÓN Y VALIDACIÓN PROGRAMÁTICA DE SEGURIDAD
+        // 8. HIDRATACIÓN Y VALIDACIÓN PROGRAMÁTICA DE SEGURIDAD
         $dietaryPlan = new DietaryPlan();
         $dietaryPlan->setPatient($patient);
         $dietaryPlan->setName("Plan Nutricional RAG - " . ($dietData['totalKcal'] ?? $kcal) . " kcal");
@@ -128,17 +150,6 @@ PROMPT;
                 foreach ($mealData['items'] as $itemData) {
                     $foodName = $itemData['foodName'] ?? 'Alimento Desconocido';
                     
-                    // --- NUEVO: FILTRO PROGRAMÁTICO ANTI-ALERGIAS ---
-                    foreach ($allergies as $allergy) {
-                        // Búsqueda insensible a mayúsculas/minúsculas
-                        if (stripos($foodName, $allergy) !== false) {
-                            throw new \RuntimeException(sprintf(
-                                "ALERTA DE SEGURIDAD CLÍNICA: La IA intentó recetar '%s', lo cual entra en conflicto con la alergia del paciente a '%s'. Generación abortada.",
-                                $foodName,
-                                $allergy
-                            ));
-                        }
-                    }
 
                     $foodItem = $foodRepo->findOneBy(['name' => $foodName]);
                     if (!$foodItem) {

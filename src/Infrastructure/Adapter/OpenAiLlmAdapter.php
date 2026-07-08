@@ -28,6 +28,8 @@ readonly class OpenAiLlmAdapter implements LlmInferenceInterface
                     'Authorization' => 'Bearer ' . $this->apiKey,
                     'Content-Type'  => 'application/json',
                 ],
+                // Aumentamos el timeout a 120 segundos para dar tiempo a OpenAI a generar dietas complejas
+                'timeout' => 120,
                 'json' => [
                     'model'       => 'gpt-4o-mini',
                     'messages'    => [
@@ -41,6 +43,9 @@ readonly class OpenAiLlmAdapter implements LlmInferenceInterface
                         ],
                     ],
                     'temperature' => 0.0,
+
+                    // Aumentamos el límite de tokens para permitir dietas completas de 7 días
+                    'max_tokens' => 8192,
                     
                     // Forzamos la salida estructurada para hidratar las entidades del dominio
                     'response_format' => [
