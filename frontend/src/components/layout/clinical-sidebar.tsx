@@ -35,8 +35,9 @@ export function ClinicalSidebar() {
                 if (payload.roles && payload.roles.includes("ROLE_ADMIN")) {
                     setIsAdmin(true);
                 }
-                if (payload.email) {
-                    setUserEmail(payload.email);
+                // El campo estándar en el token JWT de Lexik es 'username', que en esta app contiene el email.
+                if (payload.username) {
+                    setUserEmail(payload.username);
                 }
             } catch (error) {
                 console.error("Error decodificando el token JWT", error);
@@ -170,7 +171,7 @@ export function ClinicalSidebar() {
                         <p className="truncate text-sm font-medium text-slate-200">
                             {userEmail !== "Cargando..."
                                 ? userEmail.split("@")[0]
-                                : "Dr. Facultativo"}
+                                : `${userEmail}`}
                         </p>
                         <p className="text-xs text-slate-500">
                             Licencia Activa
