@@ -9,6 +9,10 @@ use App\Domain\Service\LlmInferenceInterface;
 use App\Infrastructure\Repository\DocumentChunkRepository;
 use App\Infrastructure\Repository\PatientRepository;
 use App\Infrastructure\Entity\DietaryPlan;
+use App\Infrastructure\Entity\DietDay;
+use App\Infrastructure\Entity\Meal;
+use App\Infrastructure\Entity\MealItem;
+use App\Infrastructure\Entity\FoodItem;
 use Doctrine\ORM\EntityManagerInterface;
 
 readonly class GenerateClinicalDietUseCase
@@ -34,43 +38,151 @@ readonly class GenerateClinicalDietUseCase
             throw new \InvalidArgumentException("Paciente no localizado.");
         }
 
-        // 2. Vectorizar la petición del frontend
+        // --- EXTRACCIÓN DEL PERFIL CLÍNICO ---
+        $allergies = $patient->getAllergies()->map(fn($a) => $a->getName())->toArray();
+        $allergiesStr = empty($allergies) ? "Ninguna conocida" : implode(', ', $allergies);
+        
+        $pathologies = $patient->getPathologies() ?: "Ninguna registrada";
+        
+        // Obtenemos la última medición biométrica si existe
+        $latestMeasurement = $patient->getMeasurements()->last();
+        $biometricsStr = "No hay mediciones registradas.";
+        if ($latestMeasurement) {
+            $biometricsStr = sprintf(
+                "Peso: %s kg, Altura: %s cm, Grasa: %s%%", 
+                $latestMeasurement->getWeight() ?? 'N/A',
+                $latestMeasurement->getHeight() ?? 'N/A',
+                $latestMeasurement->getBodyFatPercentage() ?? 'N/A'
+            );
+        }
+
+        // 2. Vectorizar la petición
         $queryVectorArray = $this->embeddingGenerator->generateEmbedding($query);
         $queryVectorString = json_encode($queryVectorArray); 
 
-        // 3. Recuperar ENTIDADES desde la base de conocimiento vectorial (RAG)
+        // 3. Recuperar fragmentos (RAG)
         $chunkEntities = $this->documentChunkRepository->findSimilarChunkEntities($queryVectorString, 4);
 
-        // 4. Extraer el texto plano para construir el contexto del LLM
         $contextTexts = [];
         foreach ($chunkEntities as $entity) {
             $contextTexts[] = $entity->getContent();
         }
         $contextString = implode("\n\n---\n\n", $contextTexts);
 
-        // 5. Definir las variables de Prompting que faltaban
-        $systemPrompt = "Eres un asistente clínico experto en nutrición. Utiliza EXCLUSIVAMENTE el siguiente contexto médico indexado para fundamentar tu propuesta nutricional. Si el contexto no es suficiente, indícalo. \n\nContexto Médico:\n" . $contextString;
-        $userPrompt = $query;
+        // 4. CALCULAR DÍAS A GENERAR
+        $totalDays = $startDate->diff($endDate)->days + 1;
+        // Obligamos a generar un máximo de 7 días (plantilla semanal rotativa) para evitar límite de tokens
+        $diasAGenerar = $totalDays > 7 ? 7 : max(1, $totalDays);
 
-        // 6. Ejecutar la inferencia (Simulada o en API real)
-        $dietContent = $this->llmInference->generateText($systemPrompt, $userPrompt);
+        // 5. PROMPTING CLÍNICO DEFENSIVO
+        $systemPrompt = <<<PROMPT
+Eres un asistente clínico experto en nutrición. Utiliza EXCLUSIVAMENTE el siguiente contexto médico indexado para fundamentar tu propuesta.
 
-        // 7. Persistencia con Trazabilidad (B2B RAG)
-        $dietPlan = new DietaryPlan();
-        $dietPlan->setPatient($patient);
-        $dietPlan->setName("Plan Nutricional RAG - " . $kcal . " kcal");
-        $dietPlan->setKcal($kcal);
-        $dietPlan->setStartDate($startDate);
-        $dietPlan->setEndDate($endDate);
+REGLAS DE FORMATO (JSON ESTRICTO):
+1. Debes generar el JSON estructurado para EXACTAMENTE $diasAGenerar días distintos (del día 1 al día $diasAGenerar). Es absolutamente obligatorio que el JSON contenga la estructura completa para todos los días solicitados, no te detengas en el día 1.
+2. CADA DÍA debe contener OBLIGATORIAMENTE un array meals de 1 a 5 ingestas distintas, dependiendo del número de ingestas que se te indiquen en el contexto (Desayuno, Media Mañana, Comida, Merienda, Cena). En el caso de no estar indicadas, serán 5.
+3. No resumas, no omitas comidas. Si no tienes datos específicos, inventa una opción saludable acorde al contexto.
+
+ESQUEMA OBLIGATORIO (Repite esta estructura para cada día):
+{
+  "dayNumber": 1,
+  "meals": [
+    {"type": "Desayuno", "time": "08:00", "items": [{"foodName": "...", "kcal": 0, "proteins": 0, "carbs": 0, "fats": 0, "quantity": "1 ud"}]},
+    {"type": "Media Mañana", "time": "11:00", "items": [...]},
+    {"type": "Comida", "time": "14:00", "items": [...]},
+    {"type": "Merienda", "time": "17:00", "items": [...]},
+    {"type": "Cena", "time": "21:00", "items": [...]}
+  ]
+}
+
+CONTEXTO MÉDICO (Base de Conocimiento):
+$contextString
+
+PERFIL DEL PACIENTE:
+- Alergias/Intolerancias: $allergiesStr
+- Patologías Clínicas: $pathologies
+- Biometría Actual: $biometricsStr
+- Objetivo Kcal Diarias: $kcal kcal
+
+REGLA CRÍTICA DE SEGURIDAD: 
+Bajo NINGUNA circunstancia puedes incluir alimentos que contengan o deriven de los alérgenos mencionados. 
+PROMPT;
         
-        // Guardamos la trazabilidad de qué fragmentos se usaron
-        foreach ($chunkEntities as $entity) {
-            $dietPlan->addDocumentChunk($entity);
+        // 6. Inferencia (Structured Outputs)
+        $dietContent = $this->llmInference->generateText($systemPrompt, $query);
+        
+        // 7. Decodificar JSON
+        $dietData = json_decode($dietContent, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \RuntimeException("La IA no devolvió un JSON válido. Error: " . json_last_error_msg());
         }
 
-        $this->em->persist($dietPlan);
+        // 8. HIDRATACIÓN Y VALIDACIÓN PROGRAMÁTICA DE SEGURIDAD
+        $dietaryPlan = new DietaryPlan();
+        $dietaryPlan->setPatient($patient);
+        $dietaryPlan->setName("Plan Nutricional RAG - " . ($dietData['totalKcal'] ?? $kcal) . " kcal");
+        $dietaryPlan->setObservations($dietData['observations'] ?? 'Dieta generada por IA.');
+        $dietaryPlan->setKcal($dietData['totalKcal'] ?? $kcal);
+        $dietaryPlan->setStartDate($startDate);
+        $dietaryPlan->setEndDate($endDate);
+        
+        foreach ($chunkEntities as $entity) {
+            $dietaryPlan->addDocumentChunk($entity);
+        }
+
+        $foodRepo = $this->em->getRepository(FoodItem::class);
+
+        foreach ($dietData['days'] as $dayData) {
+            $dietDay = new DietDay();
+            $dietDay->setDayNumber($dayData['dayNumber']);
+            $dietaryPlan->addDietDay($dietDay);
+
+            foreach ($dayData['meals'] as $mealData) {
+                $meal = new Meal();
+                $meal->setName($mealData['type']);
+                try {
+                    $meal->setMealTime(new \DateTimeImmutable($mealData['time']));
+                } catch (\Exception $e) {
+                    $meal->setMealTime(null);
+                }
+                $dietDay->addMeal($meal);
+
+                foreach ($mealData['items'] as $itemData) {
+                    $foodName = $itemData['foodName'] ?? 'Alimento Desconocido';
+                    
+
+                    $foodItem = $foodRepo->findOneBy(['name' => $foodName]);
+                    if (!$foodItem) {
+                        $foodItem = new FoodItem();
+                        $foodItem->setName($foodName);
+                        $foodItem->setKcalPer100g((float) ($itemData['kcal'] ?? 0));
+                        $foodItem->setMacros([
+                            'proteins' => $itemData['proteins'] ?? 0,
+                            'carbs' => $itemData['carbs'] ?? 0,
+                            'fats' => $itemData['fats'] ?? 0,
+                        ]);
+                        $foodItem->setCategory('Generado por IA');
+                        $this->em->persist($foodItem); 
+                    }
+
+                    $mealItem = new MealItem();
+                    $mealItem->setFoodItem($foodItem);
+
+                    preg_match('/([\d.,]+)\s*(.*)/', $itemData['quantity'] ?? '1 ud', $matches);
+                    $qty = isset($matches[1]) ? (float) str_replace(',', '.', $matches[1]) : 1.0;
+                    $unit = !empty($matches[2]) ? $matches[2] : 'ud';
+
+                    $mealItem->setQuantity($qty);
+                    $mealItem->setUnit($unit);
+                    
+                    $meal->addMealItem($mealItem);
+                }
+            }
+        }
+
+        $this->em->persist($dietaryPlan);
         $this->em->flush();
 
-        return $dietContent;
+        return $dietContent; 
     }
 }

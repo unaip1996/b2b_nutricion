@@ -21,7 +21,7 @@ export function RagWorkspace() {
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 font-medium text-white transition-colors hover:bg-slate-800"
         >
           <Sparkles className="h-5 w-5" aria-hidden="true" />
-          Ejecutar Inferencia (IA)
+          Generar Dieta (IA)
         </button>
       </section>
 

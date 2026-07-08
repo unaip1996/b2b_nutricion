@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { PatientHeader } from "@/components/clinical/patient-header";
 import { PersonalDataColumn } from "@/components/clinical/personal-data-column";
 import { ClinicalHistoryColumn } from "@/components/clinical/clinical-history-column";
-import { Trash2 } from "lucide-react"; // Importamos el icono de la papelera
+import { Trash2 } from "lucide-react";
+import { BiometricEvolutionChart } from "@/components/clinical/biometric-evolution-chart";
 
 export default function PatientPage() {
     const params = useParams();
@@ -26,6 +27,7 @@ export default function PatientPage() {
         goal: "",
         notes: "",
         allergies: [] as string[],
+        measurements: [] as any[], // Añadido para que la gráfica no rompa al iniciar
     });
 
     const [isLoading, setIsLoading] = useState(false);
@@ -62,6 +64,7 @@ export default function PatientPage() {
                         goal: data.goal || "",
                         notes: data.notes || "",
                         allergies: data.allergies || [],
+                        measurements: data.measurements || [], // Recuperamos el histórico de la API
                     });
                 }
             } catch (error) {
@@ -192,6 +195,13 @@ export default function PatientPage() {
                     onChange={handleFieldChange}
                 />
             </div>
+
+            {/* GRÁFICA DE EVOLUCIÓN: Condicionada, ocupa todo el ancho y justo antes del footer */}
+            {!isCreateMode && (
+                <div className="w-full">
+                    <BiometricEvolutionChart measurements={formData.measurements} />
+                </div>
+            )}
 
             {/* ZONA INFERIOR: BOTÓN ELIMINAR (Solo visible en edición) */}
             {!isCreateMode && (

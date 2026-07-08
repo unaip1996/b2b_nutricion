@@ -7,8 +7,10 @@ namespace App\Application\UseCase;
 use App\Domain\Service\PdfExtractorInterface;
 use App\Domain\Service\TextChunkerInterface;
 use App\Domain\Service\EmbeddingGeneratorInterface;
+use App\Infrastructure\Entity\ClinicalDocument;
 use App\Infrastructure\Entity\DocumentChunk;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 readonly class IngestClinicalDocumentUseCase
 {
@@ -16,41 +18,53 @@ readonly class IngestClinicalDocumentUseCase
         private PdfExtractorInterface $pdfExtractor,
         private TextChunkerInterface $textChunker,
         private EmbeddingGeneratorInterface $embeddingGenerator,
-        private EntityManagerInterface $em
+        private EntityManagerInterface $entityManager
     ) {}
 
-    public function execute(string $filePath, string $originalFileName): void
+    public function execute(UploadedFile $file): array
     {
-        // 1. Extracción: Leer el PDF
-        $text = $this->pdfExtractor->extractText($filePath);
-
+        // 1. Extraer el texto del PDF
+        $text = $this->pdfExtractor->extractText($file->getPathname());
+        
         if (empty(trim($text))) {
-            throw new \RuntimeException('No se pudo extraer texto del PDF (Asegúrate de que no es una imagen escaneada sin OCR).');
+            throw new \RuntimeException('El documento está vacío o es una imagen escaneada sin texto legible.');
         }
 
-        // 2. Chunking: Dividir en fragmentos semánticos
-        $chunks = $this->textChunker->chunkText($text);
+        // 2. Crear la entidad padre del documento
+        $document = new ClinicalDocument();
+        $document->setFileName($file->getClientOriginalName());
+        
+        // 3. Dividir el texto en fragmentos (Chunks)
+        $chunksText = $this->textChunker->chunkText($text);
 
-        // 3. Embedding: Vectorizar y persistir
-        foreach ($chunks as $index => $chunkText) {
-            $vectorArray = $this->embeddingGenerator->generateEmbedding($chunkText);
+        // 4. Generar vectores y vincular al documento padre
+        foreach ($chunksText as $index => $chunkText) {
+            // Generar el vector matemático de 1536 dimensiones con OpenAI
+            $embedding = $this->embeddingGenerator->generateEmbedding($chunkText);
 
-            $documentChunk = new DocumentChunk();
-            $documentChunk->setContent($chunkText);
+            // Crear el fragmento y vincularlo
+            $chunk = new DocumentChunk();
+            $chunk->setContent($chunkText);
             
-            // Transformamos el array generado por OpenAI (o el simulacro) a texto plano para pgvector
-            $documentChunk->setEmbedding(json_encode($vectorArray));
+            $chunk->setEmbedding(json_encode($embedding)); 
             
-            // Metadata global: solo información del propio documento (sin ataduras a pacientes)
-            $documentChunk->setMetadata([
-                'file_name'   => $originalFileName,
+            $chunk->setMetadata([
                 'chunk_index' => $index,
-                'ingested_at' => (new \DateTimeImmutable())->format('c'),
+                'total_chunks' => count($chunksText)
             ]);
-
-            $this->em->persist($documentChunk);
+            
+            // LA MAGIA: Vinculamos el fragmento a su padre
+            $document->addChunk($chunk);
         }
 
-        $this->em->flush();
+        // 5. Guardar todo en PostgreSQL. Al hacer persist del padre, Doctrine guarda los chunks por cascada.
+        $this->entityManager->persist($document);
+        $this->entityManager->flush();
+
+        return [
+            'status' => 'success',
+            'document_id' => $document->getId()->toString(),
+            'chunks_processed' => count($chunksText)
+        ];
     }
 }

@@ -7,6 +7,7 @@ namespace App\Infrastructure\Controller;
 use App\Infrastructure\Entity\User;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use OpenApi\Attributes as OA;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -15,6 +16,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
+#[OA\Tag(name: 'Usuarios y Perfil', description: 'Endpoints para la gestión de cuentas, roles y perfil del nutricionista')]
 class UserController extends AbstractController
 {
     public function __construct(
@@ -24,6 +26,29 @@ class UserController extends AbstractController
 
     #[Route('/api/users', name: 'api_users_create', methods: ['POST'])]
     #[IsGranted('ROLE_ADMIN')]
+    #[OA\Post(summary: 'Crea un nuevo usuario en el sistema (Solo Administradores)')]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: 'email', type: 'string', example: 'nutricionista@clinica.com'),
+                new OA\Property(property: 'password', type: 'string', example: 'PasswordSegura123!'),
+                new OA\Property(property: 'roles', type: 'array', items: new OA\Items(type: 'string'), example: ['ROLE_USER', 'ROLE_NUTRITIONIST'])
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 201, 
+        description: 'Usuario creado con éxito',
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: 'message', type: 'string'),
+                new OA\Property(property: 'id', type: 'string')
+            ]
+        )
+    )]
+    #[OA\Response(response: 400, description: 'Faltan credenciales obligatorias')]
+    #[OA\Response(response: 409, description: 'El correo electrónico ya está registrado')]
     public function create(Request $request, UserPasswordHasherInterface $passwordHasher): JsonResponse
     {
         try {
@@ -78,6 +103,25 @@ class UserController extends AbstractController
      */
     #[Route('/api/profile', name: 'api_profile_show', methods: ['GET'])]
     #[IsGranted('ROLE_USER')]
+    #[OA\Get(summary: 'Obtiene el perfil y credenciales del usuario actualmente autenticado')]
+    #[OA\Response(
+        response: 200, 
+        description: 'Datos del usuario autenticado',
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(
+                    property: 'data',
+                    type: 'object',
+                    properties: [
+                        new OA\Property(property: 'id', type: 'string'),
+                        new OA\Property(property: 'email', type: 'string'),
+                        new OA\Property(property: 'roles', type: 'array', items: new OA\Items(type: 'string'))
+                    ]
+                )
+            ]
+        )
+    )]
+    #[OA\Response(response: 401, description: 'Usuario no autenticado')]
     public function showProfile(): JsonResponse
     {
         $user = $this->getUser();
@@ -97,6 +141,16 @@ class UserController extends AbstractController
      */
     #[Route('/api/profile', name: 'api_profile_update', methods: ['PUT'])]
     #[IsGranted('ROLE_USER')]
+    #[OA\Put(summary: 'Actualiza el email o contraseña del usuario actualmente autenticado')]
+    #[OA\RequestBody(
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: 'email', type: 'string', description: 'Nuevo correo electrónico'),
+                new OA\Property(property: 'password', type: 'string', description: 'Nueva contraseña en texto plano (será hasheada)')
+            ]
+        )
+    )]
+    #[OA\Response(response: 200, description: 'Perfil actualizado con éxito')]
     public function updateProfile(Request $request, UserPasswordHasherInterface $passwordHasher): JsonResponse
     {
         /** @var User $user */
@@ -128,6 +182,28 @@ class UserController extends AbstractController
 
     #[Route('/api/users', name: 'api_users_list', methods: ['GET'])]
     #[IsGranted('ROLE_ADMIN')]
+    #[OA\Get(summary: 'Lista todos los usuarios registrados en la plataforma (Excluye al administrador actual)')]
+    #[OA\Response(
+        response: 200, 
+        description: 'Array de usuarios',
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(
+                    property: 'data',
+                    type: 'array',
+                    items: new OA\Items(
+                        type: 'object',
+                        properties: [
+                            new OA\Property(property: 'id', type: 'string'),
+                            new OA\Property(property: 'email', type: 'string'),
+                            new OA\Property(property: 'roles', type: 'array', items: new OA\Items(type: 'string')),
+                            new OA\Property(property: 'lastLogin', type: 'string', format: 'date-time', nullable: true)
+                        ]
+                    )
+                )
+            ]
+        )
+    )]
     public function list(): JsonResponse
     {
         $currentUser = $this->getUser();
@@ -153,6 +229,10 @@ class UserController extends AbstractController
 
     #[Route('/api/users/{id}', name: 'api_users_show', methods: ['GET'])]
     #[IsGranted('ROLE_ADMIN')]
+    #[OA\Get(summary: 'Obtiene los detalles de un usuario específico')]
+    #[OA\Parameter(name: 'id', in: 'path', description: 'UUID del usuario', required: true, schema: new OA\Schema(type: 'string'))]
+    #[OA\Response(response: 200, description: 'Datos del usuario')]
+    #[OA\Response(response: 404, description: 'Usuario no encontrado')]
     public function show(string $id): JsonResponse
     {
         $user = $this->userRepository->find($id);
@@ -169,6 +249,20 @@ class UserController extends AbstractController
 
     #[Route('/api/users/{id}', name: 'api_users_update', methods: ['PUT'])]
     #[IsGranted('ROLE_ADMIN')]
+    #[OA\Put(summary: 'Modifica los datos y roles de un usuario existente')]
+    #[OA\Parameter(name: 'id', in: 'path', description: 'UUID del usuario a modificar', required: true, schema: new OA\Schema(type: 'string'))]
+    #[OA\RequestBody(
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: 'email', type: 'string'),
+                new OA\Property(property: 'password', type: 'string'),
+                new OA\Property(property: 'roles', type: 'array', items: new OA\Items(type: 'string'))
+            ]
+        )
+    )]
+    #[OA\Response(response: 200, description: 'Usuario actualizado con éxito')]
+    #[OA\Response(response: 403, description: 'Prohibido quitarse el rol de administrador a uno mismo')]
+    #[OA\Response(response: 404, description: 'Usuario no encontrado')]
     public function update(string $id, Request $request, UserPasswordHasherInterface $passwordHasher): JsonResponse
     {
         try {
