@@ -8,6 +8,7 @@ import {
     Calendar,
     Eye,
     ShieldCheck,
+    Pencil,
     ChevronLeft,
     Loader2,
     Trash2,
@@ -17,7 +18,7 @@ import Link from "next/link";
 interface DietPlan {
     id: string;
     createdAt: string;
-    status: "Borrador" | "Validado";
+    status: string;
     kcal: number;
 }
 
@@ -63,7 +64,7 @@ export default function PatientDietsPage() {
                 if (patientRes.ok) {
                     const pData = await patientRes.json();
                     setPatient({
-                        name: pData.data.nombre || "Paciente Anónimo",
+                        name: pData.data.name || "Paciente Anónimo",
                         historyNumber:
                             pData.data.medicalHistoryNumber ||
                             patientId.split("-")[0],
@@ -218,7 +219,7 @@ export default function PatientDietsPage() {
                                         >
                                             <td className="p-4 font-medium text-slate-800 flex items-center gap-2">
                                                 <FileSpreadsheet className="h-4 w-4 text-slate-400" />
-                                                Estructura Clínica de 4 Niveles
+                                                {diet.name}
                                             </td>
                                             <td className="p-4 text-xs font-mono">
                                                 <span className="inline-flex items-center gap-1">
@@ -246,6 +247,15 @@ export default function PatientDietsPage() {
                                                 </span>
                                             </td>
                                             <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-500 text-right">
+                                                <button
+                                                    onClick={() =>
+                                                        router.push(`/dashboard/diets/${diet.id}`)
+                                                    }
+                                                    className="inline-flex items-center justify-center p-2 text-slate-400 transition-colors hover:text-blue-600 hover:bg-blue-50 rounded-lg focus:outline-none"
+                                                    title="Editar pauta"
+                                                >
+                                                    <Pencil className="size-4" />
+                                                </button>
                                                 <button
                                                     onClick={() =>
                                                         handleDeleteDiet(
