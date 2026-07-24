@@ -9,11 +9,13 @@
          failOnWarning="true"
          bootstrap="tests/bootstrap.php"
          cacheDirectory=".phpunit.cache"
+         displayDetailsOnPhpunitNotices="true"
 >
     <php>
         <ini name="display_errors" value="1" />
         <ini name="error_reporting" value="-1" />
         <server name="APP_ENV" value="test" force="true" />
+        <server name="APP_DEBUG" value="0" force="true" />
         <server name="SHELL_VERBOSITY" value="-1" />
     </php>
 
@@ -29,9 +31,17 @@
             restrictWarnings="true"
     >
         <include>
-            <directory>src</directory>
+            <directory>src</directory><directory>src/Application</directory>
+            <directory>src/Domain</directory>
+            <directory>src/Infrastructure/Controller</directory>
+            <directory>src/Infrastructure/Entity</directory>
+            <directory>src/Infrastructure/Repository</directory>
+            <directory>src/Infrastructure/Service</directory>
         </include>
-
+        <exclude>
+            <directory>src/Infrastructure/Adapter</directory>
+            <directory>src/Infrastructure/Command</directory>
+        </exclude>
         <deprecationTrigger>
             <method>Doctrine\Deprecations\Deprecation::trigger</method>
             <method>Doctrine\Deprecations\Deprecation::delegateTriggerToBackend</method>

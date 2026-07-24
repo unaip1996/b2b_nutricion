@@ -84,4 +84,51 @@ class PatientControllerTest extends AuthenticatedApiTestCase
 
         $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
     }
+
+    public function testPatientCrudFlow(): void
+    {
+        // 1. Nos autenticamos como admin
+        $client = $this->createAuthenticatedClient('admin-medico@test.com', 'password', ['ROLE_ADMIN']);
+
+        // 2. CREATE (POST /api/patients) - Cubre la creación de paciente, biometría y alergias
+        $createPayload = [
+            'name' => 'Paciente de Prueba',
+            'age' => 30,
+            'gender' => 'Masculino',
+            'weight' => 80.5,
+            'height' => 180,
+            'bodyFatPercentage' => 15,
+            'allergies' => ['Lactosa']
+        ];
+        
+        $client->request('POST', '/api/patients', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode($createPayload));
+        $this->assertResponseStatusCodeSame(Response::HTTP_CREATED);
+        
+        $response = json_decode($client->getResponse()->getContent(), true);
+        $patientId = $response['id'];
+        $this->assertNotEmpty($patientId);
+
+        // 3. LIST (GET /api/patients) - Cubre el cálculo de edad y listado general
+        $client->request('GET', '/api/patients');
+        $this->assertResponseIsSuccessful();
+        $listResponse = json_decode($client->getResponse()->getContent(), true);
+        $this->assertNotEmpty($listResponse['data']);
+
+        // 4. SHOW (GET /api/patients/{id}) - Cubre la extracción del historial biométrico
+        $client->request('GET', '/api/patients/' . $patientId);
+        $this->assertResponseIsSuccessful();
+
+        // 5. UPDATE (PUT /api/patients/{id}) - Cubre la lógica condicional de actualizar pesos o alergias
+        $updatePayload = [
+            'name' => 'Nombre Actualizado',
+            'weight' => 79.0, // Al cambiar el peso, forzamos a que el controlador cree una nueva métrica
+            'allergies' => ['Gluten', 'Marisco']
+        ];
+        $client->request('PUT', '/api/patients/' . $patientId, [], [], ['CONTENT_TYPE' => 'application/json'], json_encode($updatePayload));
+        $this->assertResponseIsSuccessful();
+
+        // 6. DELETE (DELETE /api/patients/{id}) - Cubre el soft delete en cascada
+        $client->request('DELETE', '/api/patients/' . $patientId);
+        $this->assertResponseIsSuccessful();
+    }
 }

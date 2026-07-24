@@ -71,7 +71,7 @@ export default function DashboardPage() {
         return (
             <div className="flex h-[70vh] items-center justify-center gap-2">
                 <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                <span className="text-sm font-medium text-slate-500">Computando analíticas agregadas...</span>
+                <span className="text-sm font-medium text-slate-500">Cargando...</span>
             </div>
         );
     }

@@ -49,7 +49,7 @@ readonly class DietController
         content: new OA\JsonContent(
             properties: [
                 new OA\Property(
-                    property: 'data', 
+                    property: 'data',
                     type: 'object',
                     properties: [
                         new OA\Property(property: 'dietary_proposal', type: 'string', description: 'String JSON con la dieta estructurada')
@@ -85,7 +85,6 @@ readonly class DietController
                     'dietary_proposal' => $dietProposal
                 ]
             ], Response::HTTP_OK);
-
         } catch (\Throwable $e) {
             return new JsonResponse([
                 'error' => 'Ha ocurrido un error interno en el motor de IA. Detalles: ' . $e->getMessage()
@@ -102,8 +101,8 @@ readonly class DietController
         content: new OA\JsonContent(
             properties: [
                 new OA\Property(
-                    property: 'data', 
-                    type: 'array', 
+                    property: 'data',
+                    type: 'array',
                     items: new OA\Items(
                         type: 'object',
                         properties: [
@@ -144,13 +143,12 @@ readonly class DietController
                     'id' => $plan->getId()->toRfc4122(),
                     'name' => $plan->getName() ?? '',
                     'createdAt' => $plan->getStartDate() ? $plan->getStartDate()->format('Y-m-d') : date('Y-m-d'),
-                    'kcal' => $plan->getKcal() ?? 2000, 
-                    'status' => $status, 
+                    'kcal' => $plan->getKcal() ?? 2000,
+                    'status' => $status,
                 ];
             }, $diets);
 
             return new JsonResponse(['data' => $data], Response::HTTP_OK);
-
         } catch (\Throwable $e) {
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
@@ -213,7 +211,6 @@ readonly class DietController
             ];
 
             return new JsonResponse(['data' => $data], Response::HTTP_OK);
-
         } catch (\Throwable $e) {
             $this->logger->error('Error fetching diet detail: ' . $e->getMessage());
             return new JsonResponse(['error' => 'Error al obtener el detalle de la dieta: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -251,7 +248,7 @@ readonly class DietController
             }
 
             $diet->getDietDays()->clear();
-            $em->flush(); 
+            $em->flush();
 
             $foodRepo = $em->getRepository(FoodItem::class);
 
@@ -268,7 +265,11 @@ readonly class DietController
 
                     foreach ($mealData['items'] as $itemData) {
                         $foodName = $itemData['foodName'] ?? 'Alimento Desconocido';
-                        $foodItem = $foodRepo->findOneBy(['name' => $foodName]) ?? (new FoodItem())->setName($foodName)->setCategory('Editado Manualmente');
+                        $foodItem = $foodRepo->findOneBy(['name' => $foodName]) ?? (new FoodItem())
+                            ->setName($foodName)
+                            ->setCategory('Editado Manualmente')
+                            ->setKcalPer100g(0.0)
+                            ->setMacros(['proteins' => 0, 'carbs' => 0, 'fats' => 0]);
                         $em->persist($foodItem);
 
                         $mealItem = new MealItem();
@@ -282,7 +283,6 @@ readonly class DietController
             $em->flush();
 
             return new JsonResponse(['message' => 'Pauta actualizada con éxito.'], Response::HTTP_OK);
-
         } catch (\Throwable $e) {
             $this->logger->error('Error updating diet: ' . $e->getMessage() . ' en ' . $e->getFile() . ':' . $e->getLine());
             return new JsonResponse(['error' => 'Error al actualizar la pauta: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -308,7 +308,6 @@ readonly class DietController
             $em->flush();
 
             return new JsonResponse(['message' => 'Pauta eliminada correctamente.'], Response::HTTP_OK);
-
         } catch (\Throwable $e) {
             return new JsonResponse(['error' => 'Fallo al eliminar: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

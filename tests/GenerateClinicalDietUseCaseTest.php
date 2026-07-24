@@ -30,7 +30,7 @@ class GenerateClinicalDietUseCaseTest extends TestCase
         $this->documentChunkRepository = $this->createMock(DocumentChunkRepository::class);
         $this->embeddingGenerator = $this->createMock(EmbeddingGeneratorInterface::class);
         $this->llmInference = $this->createMock(LlmInferenceInterface::class);
-        $this->entityManager = $this->createMock(EntityManagerInterface::class);
+        $this->entityManager = $this->createStub(EntityManagerInterface::class);
 
         $this->useCase = new GenerateClinicalDietUseCase(
             $this->patientRepository,
@@ -50,7 +50,7 @@ class GenerateClinicalDietUseCaseTest extends TestCase
         $endDate = new \DateTimeImmutable('+7 days');
 
         // 1. Configurar Mock de Paciente
-        $patient = $this->createMock(Patient::class);
+        $patient = $this->createStub(Patient::class);
         $patient->method('getAllergies')->willReturn(new ArrayCollection());
         $patient->method('getPathologies')->willReturn('Ninguna registrada');
         $patient->method('getMeasurements')->willReturn(new ArrayCollection());
@@ -66,7 +66,7 @@ class GenerateClinicalDietUseCaseTest extends TestCase
             ->with($query)
             ->willReturn([0.1, 0.2, 0.3]);
 
-        $chunkMock = $this->createMock(DocumentChunk::class);
+        $chunkMock = $this->createStub(DocumentChunk::class);
         $chunkMock->method('getContent')->willReturn('Guía médica sobre proteínas.');
 
         $this->documentChunkRepository->expects($this->once())

@@ -70,9 +70,11 @@ class UserControllerTest extends AuthenticatedApiTestCase
     public function testRegularUserCannotListUsers(): void
     {
         $client = $this->createAuthenticatedClient('regular.user@test.com', 'password', ['ROLE_USER']);
+        $client->catchExceptions(false);
+        
+        $this->expectException(\Symfony\Component\Security\Core\Exception\AccessDeniedException::class);
+        
         $client->request('GET', '/api/users');
-
-        $this->assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
     }
 
     public function testAdminCanCreateUser(): void
