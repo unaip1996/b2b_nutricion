@@ -13,6 +13,11 @@ if ($_SERVER['APP_DEBUG'] ?? $_ENV['APP_DEBUG'] ?? false) {
     umask(0000);
 }
 
+echo "Limpiando la caché de test...\n";
+passthru(sprintf(
+    'php "%s/../bin/console" cache:clear --env=test --no-warmup', __DIR__
+));
+
 echo "Preparando base de datos de test...\n";
 passthru(sprintf(
     'php "%s/../bin/console" doctrine:database:drop --env=test --force --if-exists', __DIR__

@@ -117,6 +117,11 @@ PROMPT;
             throw new \RuntimeException("La IA no devolvió un JSON válido. Error: " . json_last_error_msg());
         }
 
+        // Validación programática del schema mínimo esperado
+        if (!isset($dietData['days']) || !is_array($dietData['days'])) {
+            throw new \RuntimeException("La IA no devolvió una estructura de días válida.");
+        }
+
         // 8. HIDRATACIÓN Y VALIDACIÓN PROGRAMÁTICA DE SEGURIDAD
         $dietaryPlan = new DietaryPlan();
         $dietaryPlan->setPatient($patient);

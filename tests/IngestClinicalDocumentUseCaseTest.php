@@ -8,53 +8,82 @@ use App\Application\UseCase\IngestClinicalDocumentUseCase;
 use App\Domain\Service\EmbeddingGeneratorInterface;
 use App\Domain\Service\PdfExtractorInterface;
 use App\Domain\Service\TextChunkerInterface;
+use App\Infrastructure\Entity\ClinicalDocument;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use Symfony\Component\Uid\Uuid;
-use App\Infrastructure\Entity\ClinicalDocument;
 
+#[AllowMockObjectsWithoutExpectations]
 class IngestClinicalDocumentUseCaseTest extends TestCase
 {
-    public function testExecuteSuccessfullyProcessesDocument(): void
+    private PdfExtractorInterface $pdfExtractor;
+    private TextChunkerInterface $textChunker;
+    private EmbeddingGeneratorInterface $embeddingGenerator;
+    private EntityManagerInterface $entityManager;
+    private IngestClinicalDocumentUseCase $useCase;
+
+    protected function setUp(): void
     {
-        $pdfExtractor = $this->createMock(PdfExtractorInterface::class);
-        $textChunker = $this->createMock(TextChunkerInterface::class);
-        $embeddingGenerator = $this->createMock(EmbeddingGeneratorInterface::class);
-        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $this->pdfExtractor = $this->createMock(PdfExtractorInterface::class);
+        $this->textChunker = $this->createMock(TextChunkerInterface::class);
+        $this->embeddingGenerator = $this->createMock(EmbeddingGeneratorInterface::class);
+        $this->entityManager = $this->createMock(EntityManagerInterface::class);
 
-        $useCase = new IngestClinicalDocumentUseCase(
-            $pdfExtractor,
-            $textChunker,
-            $embeddingGenerator,
-            $entityManager
+        $this->useCase = new IngestClinicalDocumentUseCase(
+            $this->pdfExtractor,
+            $this->textChunker,
+            $this->embeddingGenerator,
+            $this->entityManager
         );
+    }
 
-        $file = $this->createStub(UploadedFile::class);
-        $file->method('getPathname')->willReturn('/tmp/dummy.pdf');
-        $file->method('getClientOriginalName')->willReturn('guia_clinica.pdf');
+    public function testExecuteSuccessfully(): void
+    {
+        $filePath = tempnam(sys_get_temp_dir(), 'upl');
+        file_put_contents($filePath, 'dummy content');
+        $uploadedFile = new UploadedFile($filePath, 'test.pdf', test: true);
 
-        $pdfExtractor->expects($this->once())->method('extractText')->willReturn('Texto de prueba clínica');
-        $textChunker->expects($this->once())->method('chunkText')->willReturn(['Texto de prueba clínica']);
-        $embeddingGenerator->expects($this->once())->method('generateEmbedding')->willReturn([0.1, 0.2, 0.3]);
-        
-        // LA MAGIA: Interceptamos el persist y usamos Reflection para asignarle el ID al objeto real instanciado
-        $entityManager->expects($this->once())
+        $this->pdfExtractor->expects($this->once())
+            ->method('extractText')
+            ->willReturn('Clinical text content.');
+
+        $this->textChunker->expects($this->once())
+            ->method('chunkText')
+            ->with('Clinical text content.')
+            ->willReturn(['chunk 1', 'chunk 2']);
+
+        $this->embeddingGenerator->expects($this->exactly(2))
+            ->method('generateEmbedding')
+            ->willReturn([0.1, 0.2, 0.3]);
+
+        $this->entityManager->expects($this->once())
             ->method('persist')
-            ->willReturnCallback(function ($entity) {
-                if ($entity instanceof ClinicalDocument) {
-                    $reflection = new \ReflectionClass($entity);
-                    $property = $reflection->getProperty('id');
-                    $property->setValue($entity, Uuid::fromString('00000000-0000-0000-0000-000000000000'));
-                }
+            ->with($this->isInstanceOf(ClinicalDocument::class))
+            ->willReturnCallback(function (ClinicalDocument $doc): void {
+                // Simulate Doctrine setting the ID on persist/flush
+                \Closure::bind(fn () => $this->id = \Symfony\Component\Uid\Uuid::v4(), $doc, ClinicalDocument::class)();
             });
-            
-        $entityManager->expects($this->once())->method('flush');
+        $this->entityManager->expects($this->once())->method('flush');
 
-        $result = $useCase->execute($file);
+        $result = $this->useCase->execute($uploadedFile);
 
         $this->assertSame('success', $result['status']);
-        $this->assertSame(1, $result['chunks_processed']);
-        $this->assertSame('00000000-0000-0000-0000-000000000000', $result['document_id']);
+        $this->assertArrayHasKey('document_id', $result);
+        $this->assertSame(2, $result['chunks_processed']);
+    }
+
+    public function testExecuteThrowsExceptionForEmptyDocument(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('El documento está vacío o es una imagen escaneada sin texto legible.');
+
+        $uploadedFile = new UploadedFile(tempnam(sys_get_temp_dir(), 'upl'), 'empty.pdf', test: true);
+
+        $this->pdfExtractor->expects($this->once())
+            ->method('extractText')
+            ->willReturn('   '); // Empty or whitespace content
+
+        $this->useCase->execute($uploadedFile);
     }
 }

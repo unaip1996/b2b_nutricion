@@ -96,4 +96,75 @@ class UserControllerTest extends AuthenticatedApiTestCase
 
         $this->assertResponseStatusCodeSame(Response::HTTP_CREATED);
     }
+
+    public function testAdminCanGetSpecificUser(): void
+    {
+        $adminClient = $this->createAuthenticatedClient('admin-getter-specific@test.com', 'password', ['ROLE_ADMIN']);
+
+        $userToGet = new User();
+        $userToGet->setEmail('user.to.get@test.com');
+        $passwordHasher = $adminClient->getContainer()->get(\Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface::class);
+        $userToGet->setPassword($passwordHasher->hashPassword($userToGet, 'password'));
+        $this->em->persist($userToGet);
+        $this->em->flush();
+        $userId = $userToGet->getId();
+
+        $adminClient->request('GET', '/api/users/' . $userId);
+
+        $this->assertResponseIsSuccessful();
+        $response = json_decode($adminClient->getResponse()->getContent(), true);
+        $this->assertSame('user.to.get@test.com', $response['data']['email']);
+    }
+
+    public function testAdminCanUpdateSpecificUser(): void
+    {
+        $adminClient = $this->createAuthenticatedClient('admin-updater-specific@test.com', 'password', ['ROLE_ADMIN']);
+
+        $userToUpdate = new User();
+        $userToUpdate->setEmail('user.to.update@test.com');
+        $passwordHasher = $adminClient->getContainer()->get(\Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface::class);
+        $userToUpdate->setPassword($passwordHasher->hashPassword($userToUpdate, 'password'));
+        $this->em->persist($userToUpdate);
+        $this->em->flush();
+        $userId = $userToUpdate->getId();
+
+        $adminClient->request(
+            'PUT',
+            '/api/users/' . $userId,
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            json_encode(['email' => 'updated.by.admin@test.com', 'roles' => ['ROLE_STAFF']])
+        );
+
+        $this->assertResponseIsSuccessful();
+        $this->em->clear();
+
+        $updatedUser = $this->em->getRepository(User::class)->find($userId);
+        $this->assertSame('updated.by.admin@test.com', $updatedUser->getEmail());
+        $this->assertContains('ROLE_STAFF', $updatedUser->getRoles());
+    }
+
+    public function testAdminCanDeleteUser(): void
+    {
+        $adminClient = $this->createAuthenticatedClient('admin-deleter@test.com', 'password', ['ROLE_ADMIN']);
+
+        $userToDelete = new User();
+        $userToDelete->setEmail('user.to.delete@test.com');
+        $passwordHasher = $adminClient->getContainer()->get(\Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface::class);
+        $userToDelete->setPassword($passwordHasher->hashPassword($userToDelete, 'password'));
+        $this->em->persist($userToDelete);
+        $this->em->flush();
+        $userId = $userToDelete->getId();
+
+        $adminClient->request('DELETE', '/api/users/' . $userId);
+
+        $this->assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+
+        // Verificamos el borrado lógico (soft delete)
+        $this->em->clear();
+        /** @var User $deletedUser */
+        $deletedUser = $this->em->getRepository(User::class)->find($userId);
+        $this->assertNotNull($deletedUser->getDeletedAt());
+    }
 }

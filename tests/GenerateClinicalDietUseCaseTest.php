@@ -10,11 +10,15 @@ use App\Domain\Service\LlmInferenceInterface;
 use App\Infrastructure\Repository\DocumentChunkRepository;
 use App\Infrastructure\Repository\PatientRepository;
 use App\Infrastructure\Entity\Patient;
+use App\Infrastructure\Entity\Allergy;
+use App\Infrastructure\Entity\FoodItem;
 use App\Infrastructure\Entity\DocumentChunk;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Common\Collections\ArrayCollection;
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 
+#[AllowMockObjectsWithoutExpectations]
 class GenerateClinicalDietUseCaseTest extends TestCase
 {
     private PatientRepository $patientRepository;
@@ -30,7 +34,7 @@ class GenerateClinicalDietUseCaseTest extends TestCase
         $this->documentChunkRepository = $this->createMock(DocumentChunkRepository::class);
         $this->embeddingGenerator = $this->createMock(EmbeddingGeneratorInterface::class);
         $this->llmInference = $this->createMock(LlmInferenceInterface::class);
-        $this->entityManager = $this->createStub(EntityManagerInterface::class);
+        $this->entityManager = $this->createMock(EntityManagerInterface::class);
 
         $this->useCase = new GenerateClinicalDietUseCase(
             $this->patientRepository,
@@ -84,5 +88,110 @@ class GenerateClinicalDietUseCaseTest extends TestCase
 
         // 5. Verificar Resultado
         $this->assertSame($expectedLlmJson, $result);
+    }
+
+    public function testExecuteThrowsExceptionWhenPatientNotFound(): void
+    {
+        $this->patientRepository->method('find')->willReturn(null);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->useCase->execute('1', 'q', 2000, new \DateTimeImmutable(), new \DateTimeImmutable());
+    }
+
+    public function testExecuteThrowsExceptionOnInvalidJsonFromLlm(): void
+    {
+        $this->patientRepository->method('find')->willReturn(new Patient());
+        $this->llmInference->method('generateText')->willReturn('ESTO NO ES UN JSON');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('La IA no devolvió un JSON válido');
+        $this->useCase->execute('1', 'q', 2000, new \DateTimeImmutable(), new \DateTimeImmutable());
+    }
+
+    public function testExecuteThrowsExceptionOnMissingDaysKeyInLlmResponse(): void
+    {
+        $this->patientRepository->method('find')->willReturn(new Patient());
+
+        // JSON válido pero sin la clave 'days'
+        $invalidJson = json_encode([
+            'totalKcal' => 2000,
+            'observations' => 'Dieta sin días.',
+        ]);
+        $this->llmInference->method('generateText')->willReturn($invalidJson);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('La IA no devolvió una estructura de días válida.');
+
+        $this->useCase->execute('1', 'q', 2000, new \DateTimeImmutable(), new \DateTimeImmutable());
+    }
+
+    public function testExecuteHandlesInvalidMealTimeGracefully(): void
+    {
+        $patient = new Patient();
+        $this->patientRepository->method('find')->willReturn($patient);
+
+        $chunk = new DocumentChunk();
+        $chunk->setContent('Contexto Médico');
+        $this->documentChunkRepository->method('findSimilarChunkEntities')->willReturn([$chunk]);
+
+        $jsonWithInvalidTime = json_encode([
+            'days' => [
+                [
+                    'dayNumber' => 1,
+                    'meals' => [
+                        [
+                            'type' => 'Desayuno',
+                            'time' => 'hora-invalida', // Formato de hora incorrecto
+                            'items' => []
+                        ]
+                    ]
+                ]
+            ]
+        ]);
+        $this->llmInference->method('generateText')->willReturn($jsonWithInvalidTime);
+
+        // Se espera que el EntityManager persista el plan de dieta aunque la hora sea nula.
+        $this->entityManager->expects($this->once())->method('persist');
+        $this->entityManager->expects($this->once())->method('flush');
+
+        $result = $this->useCase->execute('1', 'q', 2000, new \DateTimeImmutable(), new \DateTimeImmutable());
+        $this->assertSame($jsonWithInvalidTime, $result);
+    }
+
+    public function testExecuteCreatesNewFoodItemWhenNotFoundInDatabase(): void
+    {
+        $patient = new Patient();
+        $this->patientRepository->method('find')->willReturn($patient);
+
+        $chunk = new DocumentChunk();
+        $chunk->setContent('Contexto Médico');
+        $this->documentChunkRepository->method('findSimilarChunkEntities')->willReturn([$chunk]);
+
+        $jsonWithNewFood = json_encode([
+            'days' => [[
+                'dayNumber' => 1,
+                'meals' => [[
+                    'type' => 'Comida',
+                    'time' => '14:00',
+                    'items' => [[
+                        'foodName' => 'Alimento Nuevo Inexistente',
+                        'quantity' => '100 g',
+                        'kcal' => 500
+                    ]]
+                ]]
+            ]]
+        ]);
+        $this->llmInference->method('generateText')->willReturn($jsonWithNewFood);
+
+        // Mock del repositorio de FoodItem para que devuelva null
+        $foodRepo = $this->createMock(\Doctrine\ORM\EntityRepository::class);
+        $foodRepo->method('findOneBy')->willReturn(null);
+        $this->entityManager->method('getRepository')->willReturn($foodRepo);
+
+        // Se espera que se persista el DietaryPlan y el nuevo FoodItem
+        $this->entityManager->expects($this->exactly(2))->method('persist');
+        $this->entityManager->expects($this->once())->method('flush');
+
+        $this->useCase->execute('1', 'q', 2000, new \DateTimeImmutable(), new \DateTimeImmutable());
     }
 }

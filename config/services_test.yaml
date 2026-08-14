@@ -1,0 +1,18 @@
+services:
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/'
+        exclude: '../src/{DependencyInjection,Entity,Migrations,Tests,Kernel.php}'
+
+    # controllers are imported separately to make sure they're public
+    # as web requests require controllers to be public
+    App\Infrastructure\Controller\:
+        resource: '../src/Infrastructure/Controller'
+        tags: ['controller.service_arguments']
+        public: true # Make controllers public for testing
+
+    App\Application\UseCase\GenerateClinicalDietUseCase:
+        public: true
+    App\Application\UseCase\IngestClinicalDocumentUseCase:
+        public: true 
