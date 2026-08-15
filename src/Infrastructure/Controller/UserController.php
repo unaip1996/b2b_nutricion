@@ -21,13 +21,13 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 #[OA\Tag(name: 'Usuarios y Perfil', description: 'Endpoints para la gestión de cuentas, roles y perfil del nutricionista')]
 class UserController extends AbstractController
 {
-    #[Route('/api/users', name: 'api_users_create', methods: ['POST'])]
-    #[IsGranted('ROLE_ADMIN')]
     public function __construct(
         private readonly TokenStorageInterface $tokenStorage,
         private readonly AuthorizationCheckerInterface $authorizationChecker,
     ) {
     }
+    #[Route('/api/users', name: 'api_users_create', methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
     #[OA\Post(summary: 'Crea un nuevo usuario en el sistema (Solo Administradores)')]
     #[OA\RequestBody(
         required: true,
@@ -222,7 +222,6 @@ class UserController extends AbstractController
     )]
     public function list(UserRepository $userRepository): JsonResponse
     {
-        $currentUser = $this->getUser();
         $token = $this->tokenStorage->getToken();
         $currentUser = $token ? $token->getUser() : null;
 

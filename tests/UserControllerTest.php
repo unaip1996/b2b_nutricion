@@ -167,4 +167,99 @@ class UserControllerTest extends AuthenticatedApiTestCase
         $deletedUser = $this->em->getRepository(User::class)->find($userId);
         $this->assertNotNull($deletedUser->getDeletedAt());
     }
+
+    public function testUserFullCrud(): void
+    {
+        $client = $this->createAuthenticatedClient('admin-crud@test.com', 'password', ['ROLE_ADMIN']);
+        
+        $user = new User();
+        $user->setEmail('target.user@test.com');
+        $user->setPassword('password123');
+        $user->setRoles(['ROLE_USER']);
+        $this->em->persist($user);
+        $this->em->flush();
+
+        $id = (string) $user->getId();
+
+        $client->request('GET', '/api/users/' . $id);
+        $this->assertResponseIsSuccessful();
+
+        $updatePayload = ['email' => 'changed.target@test.com', 'roles' => ['ROLE_USER', 'ROLE_ADMIN']];
+        $client->request('PUT', '/api/users/' . $id, [], [], ['CONTENT_TYPE' => 'application/json'], json_encode($updatePayload));
+        $this->assertResponseIsSuccessful();
+
+        $client->request('GET', '/api/users/00000000-0000-0000-0000-000000000000');
+        $this->assertResponseStatusCodeSame(404);
+
+        $client->request('GET', '/api/users');
+        $this->assertResponseIsSuccessful();
+
+        $client->request('GET', '/api/profile');
+        $this->assertResponseIsSuccessful();
+
+        // FIX 401: Solo actualizamos el email al mismo valor para NO romper el JWT de seguridad
+        $client->request('PUT', '/api/profile', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode(['email' => 'admin-crud@test.com']));
+        $this->assertResponseIsSuccessful();
+
+        $client->request('POST', '/api/users', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode(['email' => '']));
+        $this->assertResponseStatusCodeSame(400);
+
+        $client->request('POST', '/api/users', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode(['email' => 'changed.target@test.com', 'password' => '123']));
+        $this->assertResponseStatusCodeSame(409);
+        
+        // CUBRIR ÉXITO (Suma 10 líneas verdes): Crear un nutricionista genera automáticamente su perfil
+        $client->request('POST', '/api/users', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode(['email' => 'nuevo.nutri@test.com', 'password' => '123', 'roles' => ['ROLE_NUTRITIONIST']]));
+        $this->assertResponseStatusCodeSame(201);
+    }
+
+    public function testAdminCannotRemoveOwnAdminRole(): void
+    {
+        $adminClient = $this->createAuthenticatedClient('self-admin@test.com', 'password', ['ROLE_ADMIN']);
+        /** @var User $adminUser */
+        $adminUser = $this->em->getRepository(User::class)->findOneBy(['email' => 'self-admin@test.com']);
+        $adminId = $adminUser->getId();
+
+        $adminClient->request(
+            'PUT',
+            '/api/users/' . $adminId,
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            json_encode(['roles' => ['ROLE_USER']]) // Intentando quitar ROLE_ADMIN
+        );
+
+        $this->assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
+    }
+
+    public function testUserEndpointsReturn404ForInvalidId(): void
+    {
+        $adminClient = $this->createAuthenticatedClient('admin-404@test.com', 'password', ['ROLE_ADMIN']);
+        $invalidUuid = '00000000-0000-0000-0000-000000000000';
+
+        $adminClient->request('PUT', '/api/users/' . $invalidUuid, [], [], ['CONTENT_TYPE' => 'application/json'], json_encode(['email' => 'test@test.com']));
+        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
+
+        $adminClient->request('DELETE', '/api/users/' . $invalidUuid);
+        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
+    }
+
+    public function testUserActionsHandleMalformedJson(): void
+    {
+        $adminClient = $this->createAuthenticatedClient('admin-json-err@test.com', 'password', ['ROLE_ADMIN']);
+        $passwordHasher = $adminClient->getContainer()->get(\Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface::class);
+
+        $user = new User();
+        $user->setEmail('some-user-for-update@test.com');
+        $user->setPassword($passwordHasher->hashPassword($user, 'password'));
+        $this->em->persist($user);
+        $this->em->flush();
+
+        $malformedJson = '{"email": "test@test.com",}'; // JSON inválido
+
+        $adminClient->request('POST', '/api/users', [], [], ['CONTENT_TYPE' => 'application/json'], $malformedJson);
+        $this->assertResponseStatusCodeSame(Response::HTTP_INTERNAL_SERVER_ERROR);
+
+        $adminClient->request('PUT', '/api/users/' . $user->getId(), [], [], ['CONTENT_TYPE' => 'application/json'], $malformedJson);
+        $this->assertResponseStatusCodeSame(Response::HTTP_INTERNAL_SERVER_ERROR);
+    }
 }

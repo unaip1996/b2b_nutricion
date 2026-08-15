@@ -1,17 +1,20 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Tests;
 
+use App\Application\UseCase\GenerateClinicalDietUseCase;
 use App\Infrastructure\Entity\Patient;
 use App\Infrastructure\Entity\DietaryPlan;
+use Symfony\Component\HttpFoundation\Response;
 
 class DietControllerTest extends AuthenticatedApiTestCase
 {
     public function testDietCrudFlow(): void
     {
         $client = $this->createAuthenticatedClient('admin-diet@test.com', 'password', ['ROLE_ADMIN']);
-        
+
         // 1. Preparar datos en base de datos para simular
         $patient = new Patient();
         $patient->setName('Paciente Dieta Test');
@@ -19,7 +22,7 @@ class DietControllerTest extends AuthenticatedApiTestCase
         $patient->setGender('Masculino');
         $patient->setBirthDate(new \DateTimeImmutable('1990-01-01'));
         $this->em->persist($patient);
-        
+
         $diet = new DietaryPlan();
         $diet->setName('Dieta Base');
         $diet->setKcal(2000);
@@ -73,9 +76,63 @@ class DietControllerTest extends AuthenticatedApiTestCase
     public function testGenerateDietValidationFailsWhenMissingParams(): void
     {
         $client = $this->createAuthenticatedClient('admin-gen@test.com', 'password', ['ROLE_USER']);
-        
+
         // Intentar generar dieta sin parámetros (Fuerza las validaciones de error)
         $client->request('POST', '/api/diets/generate', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode([]));
         $this->assertResponseStatusCodeSame(400);
+    }
+
+    public function testDietEndpointsReturn404ForInvalidId(): void
+    {
+        $client = $this->createAuthenticatedClient('diet-user-404@test.com');
+        $invalidUuid = '00000000-0000-0000-0000-000000000000';
+
+        $client->request('GET', '/api/diets/' . $invalidUuid);
+        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
+
+        $client->request('PUT', '/api/diets/' . $invalidUuid, [], [], ['CONTENT_TYPE' => 'application/json'], json_encode(['name' => 'test']));
+        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
+    }
+
+    public function testGenerateDietSuccessfully(): void
+    {
+        $client = $this->createAuthenticatedClient('admin@test.com', 'password', ['ROLE_ADMIN']);
+
+        // 1. Creamos el Paciente rellenando ESTRICTAMENTE los 4 campos obligatorios de tu Entidad
+        $patient = new \App\Infrastructure\Entity\Patient();
+        $patient->setName('Paciente de Prueba');
+        $patient->setMedicalHistoryNumber('MHN-' . uniqid()); // Usamos uniqid() para que no choque si corres el test varias veces
+        $patient->setGender('Otro');
+        $patient->setBirthDate(new \DateTimeImmutable('1990-01-01'));
+        
+        $this->em->persist($patient);
+        $this->em->flush();
+
+        // Extraemos el UUID real generado en BD
+        $patientId = (string) $patient->getId();
+
+        // 2. Hacemos la petición con el UUID real
+        $client->request(
+            'POST',
+            '/api/diets/generate', 
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            json_encode(['patientId' => $patientId, 'query' => 'Quiero ganar músculo']) 
+        );
+
+        $this->assertResponseIsSuccessful();
+
+        $content = $client->getResponse()->getContent();
+        $responseData = json_decode($content, true);
+
+        $this->assertArrayHasKey('data', $responseData);
+        $this->assertArrayHasKey('dietary_proposal', $responseData['data']);
+
+        $proposalString = $responseData['data']['dietary_proposal'];
+
+        $this->assertStringContainsString('totalKcal', $proposalString);
+        $this->assertStringContainsString('2000', $proposalString);
+        $this->assertStringContainsString('Dieta generada por entorno de test', $proposalString);
     }
 }

@@ -129,6 +129,27 @@ class PatientControllerTest extends AuthenticatedApiTestCase
 
         // 6. DELETE (DELETE /api/patients/{id}) - Cubre el soft delete en cascada
         $client->request('DELETE', '/api/patients/' . $patientId);
-        $this->assertResponseIsSuccessful();
+        $this->assertResponseStatusCodeSame(Response::HTTP_NO_CONTENT);
+    }
+
+    public function testPatientEndpointsReturn404ForInvalidId(): void
+    {
+        $client = $this->createAuthenticatedClient('patient-user-404@test.com');
+        $invalidUuid = '00000000-0000-0000-0000-000000000000';
+
+        $client->request('PUT', '/api/patients/' . $invalidUuid, [], [], ['CONTENT_TYPE' => 'application/json'], json_encode(['name' => 'test']));
+        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
+
+        $client->request('DELETE', '/api/patients/' . $invalidUuid);
+        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
+    }
+
+    public function testPatientCreateHandlesMalformedJson(): void
+    {
+        $client = $this->createAuthenticatedClient('patient-json-err@test.com');
+        $malformedJson = '{"name": "test",}';
+
+        $client->request('POST', '/api/patients', [], [], ['CONTENT_TYPE' => 'application/json'], $malformedJson);
+        $this->assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
     }
 }

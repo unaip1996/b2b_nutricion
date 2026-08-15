@@ -38,4 +38,32 @@ class DashboardControllerTest extends AuthenticatedApiTestCase
         $this->assertArrayHasKey('recentDiets', $response['data']);
         $this->assertArrayHasKey('chartData', $response['data']);
     }
+
+    public function testDashboardStatsCoversAllStatuses(): void
+    {
+        $client = $this->createAuthenticatedClient('dashboard-user@test.com');
+        $patient = new Patient();
+        $patient->setName('Dash Patient');
+        $patient->setMedicalHistoryNumber('CG-DASH-1');
+        $patient->setGender('Femenino');
+        $patient->setBirthDate(new \DateTimeImmutable('1990-01-01'));
+        $this->em->persist($patient);
+
+        $dietActive = new DietaryPlan();
+        $dietActive->setPatient($patient)->setName('Activa')->setStartDate(new \DateTimeImmutable('-1 day'))->setEndDate(new \DateTimeImmutable('+1 day'));
+        $this->em->persist($dietActive);
+
+        $dietExpired = new DietaryPlan();
+        $dietExpired->setPatient($patient)->setName('Expirada')->setStartDate(new \DateTimeImmutable('-2 days'))->setEndDate(new \DateTimeImmutable('-1 day'));
+        $this->em->persist($dietExpired);
+
+        $dietScheduled = new DietaryPlan();
+        $dietScheduled->setPatient($patient)->setName('Programada')->setStartDate(new \DateTimeImmutable('+1 day'))->setEndDate(new \DateTimeImmutable('+2 days'));
+        $this->em->persist($dietScheduled);
+
+        $this->em->flush();
+
+        $client->request('GET', '/api/dashboard/stats');
+        $this->assertResponseIsSuccessful();
+    }
 }

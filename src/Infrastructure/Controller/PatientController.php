@@ -356,8 +356,8 @@ readonly class PatientController
     #[IsGranted('ROLE_USER')]
     #[OA\Delete(summary: 'Borrado lógico (Soft Delete) de un paciente y todos sus datos en cascada')]
     #[OA\Parameter(name: 'id', description: 'UUID del paciente', in: 'path', schema: new OA\Schema(type: 'string'))]
-    #[OA\Response(response: 200, description: 'Paciente y datos vinculados eliminados')]
-    public function delete(string $id, EntityManagerInterface $em, PatientRepository $patientRepository): JsonResponse
+    #[OA\Response(response: 204, description: 'Paciente y datos vinculados eliminados')]
+    public function delete(string $id, EntityManagerInterface $em, PatientRepository $patientRepository): Response
     {
         try {
             $patient = $patientRepository->find($id);
@@ -387,7 +387,7 @@ readonly class PatientController
             }
 
             $em->flush();
-            return new JsonResponse(['message' => 'Paciente y datos vinculados eliminados (Soft Delete)'], Response::HTTP_OK);
+            return new Response(null, Response::HTTP_NO_CONTENT);
         } catch (\Throwable $e) {
             return new JsonResponse(['error' => 'Error al ejecutar borrado: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

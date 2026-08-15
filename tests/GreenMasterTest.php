@@ -41,27 +41,25 @@ class GreenMasterTest extends TestCase
     public function testDietControllerExceptionsAndSuccess(): void
     {
         $useCase = $this->createStub(GenerateClinicalDietUseCase::class);
-        $useCase->method('execute')->willReturn('{"ok": true}');
         $logger = $this->createStub(LoggerInterface::class);
-        $controller = new DietController($useCase, $logger);
+        $controller = new DietController();
         
         $reqGenerate = new Request([], [], [], [], [], [], json_encode(['patientId'=>'1','query'=>'t']));
         $this->assertEquals(200, $controller->generateDiet($reqGenerate, $useCase)->getStatusCode());
 
         $useCaseThrow = $this->createStub(GenerateClinicalDietUseCase::class);
         $useCaseThrow->method('execute')->willThrowException(new \Exception('Test'));
-        $controllerThrow = new DietController($useCaseThrow, $logger);
-        $this->assertEquals(500, $controllerThrow->generateDiet($reqGenerate, $useCaseThrow)->getStatusCode());
+        $this->assertEquals(500, $controller->generateDiet($reqGenerate, $useCaseThrow)->getStatusCode());
         
         $em = $this->createStub(EntityManagerInterface::class);
         $em->method('getRepository')->willThrowException(new \Exception('Test'));
 
         $this->assertEquals(500, $controller->listPatientDiets('1', $em)->getStatusCode());
-        $this->assertEquals(500, $controller->getDietDetail('1', $em)->getStatusCode());
+        $this->assertEquals(500, $controller->getDietDetail('1', $em, $logger)->getStatusCode());
         $this->assertEquals(500, $controller->deleteDiet('1', $em)->getStatusCode());
         
         $reqPut = new Request([], [], [], [], [], [], '{}');
-        $this->assertEquals(500, $controller->updateDiet('1', $reqPut, $em)->getStatusCode());
+        $this->assertEquals(500, $controller->updateDiet('1', $reqPut, $em, $logger)->getStatusCode());
     }
 
     public function testIngestionControllerLogic(): void
@@ -69,7 +67,7 @@ class GreenMasterTest extends TestCase
         $chunkRepo = $this->createStub(DocumentChunkRepository::class);
         $useCase = $this->createStub(IngestClinicalDocumentUseCase::class);
         $docRepo = $this->createStub(ClinicalDocumentRepository::class);
-        $controller = new IngestionController($chunkRepo, $useCase, $docRepo);
+        $controller = new IngestionController();
 
         // Fix de Reflection para el UUID y la fecha
         $doc = new ClinicalDocument();
@@ -83,12 +81,11 @@ class GreenMasterTest extends TestCase
         $propDate->setValue($doc, new \DateTimeImmutable());
         
         $docRepo->method('findAllActive')->willReturn([$doc]);
-        $this->assertEquals(200, $controller->listDocuments()->getStatusCode());
+        $this->assertEquals(200, $controller->listDocuments($docRepo)->getStatusCode());
 
         $docRepoEx = $this->createStub(ClinicalDocumentRepository::class);
         $docRepoEx->method('findAllActive')->willThrowException(new \Exception('Test'));
-        $controllerEx = new IngestionController($chunkRepo, $useCase, $docRepoEx);
-        $this->assertEquals(500, $controllerEx->listDocuments()->getStatusCode());
+        $this->assertEquals(500, $controller->listDocuments($docRepoEx)->getStatusCode());
 
         $em = $this->createStub(EntityManagerInterface::class);
         $repo = $this->createStub(EntityRepository::class);
@@ -106,30 +103,41 @@ class GreenMasterTest extends TestCase
         $file->method('getMimeType')->willReturn('application/pdf');
         $req = new Request();
         $req->files->set('file', $file);
-        $this->assertEquals(500, $controller->upload($req)->getStatusCode());
+        $this->assertEquals(500, $controller->upload($req, $useCase)->getStatusCode());
     }
 
-    public function testPatientControllerExceptions(): void
+    public function testPatientUpdateFailsOnInvalidJson(): void
     {
         $repo = $this->createStub(PatientRepository::class);
-        $auth = $this->createStub(AuthorizationCheckerInterface::class);
+        $controller = new PatientController();
+        $em = $this->createStub(EntityManagerInterface::class);
+        $repo->method('find')->willReturn(new Patient());
+
+        $reqUpdate = new Request([], [], [], [], [], [], 'invalid');
+        $this->assertEquals(500, $controller->update('1', $reqUpdate, $em, $repo)->getStatusCode());
+    }
+
+    public function testPatientCreateFailsOnPersist(): void
+    {
         $token = $this->createStub(TokenStorageInterface::class);
-        $controller = new PatientController($repo, $auth, $token);
-        
+        $controller = new PatientController();
         $em = $this->createStub(EntityManagerInterface::class);
         
-        $patient = clone (new Patient());
-        $repo->method('find')->willReturn($patient);
-        
-        $reqUpdate = new Request([], [], [], [], [], [], 'invalid');
-        $this->assertEquals(500, $controller->update('1', $reqUpdate, $em)->getStatusCode());
-
         $reqCreateValid = new Request([], [], [], [], [], [], '{}');
         $em->method('persist')->willThrowException(new \Exception('Test'));
-        $this->assertEquals(500, $controller->create($reqCreateValid, $em)->getStatusCode());
+        $this->assertEquals(500, $controller->create($reqCreateValid, $em, $token)->getStatusCode());
+    }
+
+    public function testPatientDeleteFailsOnFlush(): void
+    {
+        $controller = new PatientController();
+        $em = $this->createStub(EntityManagerInterface::class);
+        $patientRepo = $this->createStub(PatientRepository::class);
 
         $em->method('flush')->willThrowException(new \Exception('Test'));
-        $this->assertEquals(500, $controller->delete('1', $em)->getStatusCode());
+        $patientRepo->method('find')->willReturn(new Patient());
+
+        $this->assertEquals(500, $controller->delete('1', $em, $patientRepo)->getStatusCode());
     }
 
     public function testGenerateDietUseCaseNotFound(): void

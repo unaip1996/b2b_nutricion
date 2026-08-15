@@ -41,3 +41,11 @@ services:
     App\Infrastructure\Adapter\OpenAiLlmAdapter:
         arguments:
             $apiKey: '%env(OPENAI_API_KEY)%'
+when@test:
+    services:
+        App\Tests\Stub\MockOpenAiServices: ~
+        App\Tests\Stub\MockPdfExtractor: ~
+
+        App\Domain\Service\EmbeddingGeneratorInterface: '@App\Tests\Stub\MockOpenAiServices'
+        App\Domain\Service\LlmInferenceInterface: '@App\Tests\Stub\MockOpenAiServices'
+        App\Domain\Service\PdfExtractorInterface: '@App\Tests\Stub\MockPdfExtractor'
