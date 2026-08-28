@@ -17,7 +17,7 @@ abstract class AuthenticatedApiTestCase extends WebTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
-        if ($this->em) {
+        if (isset($this->em) && $this->em->isOpen()) {
             $this->em->close();
             $this->em = null;
         }

@@ -92,6 +92,9 @@ class DietControllerTest extends AuthenticatedApiTestCase
 
         $client->request('PUT', '/api/diets/' . $invalidUuid, [], [], ['CONTENT_TYPE' => 'application/json'], json_encode(['name' => 'test']));
         $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
+
+        $client->request('DELETE', '/api/diets/' . $invalidUuid);
+        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
     }
 
     public function testGenerateDietSuccessfully(): void
@@ -134,5 +137,32 @@ class DietControllerTest extends AuthenticatedApiTestCase
         $this->assertStringContainsString('totalKcal', $proposalString);
         $this->assertStringContainsString('2000', $proposalString);
         $this->assertStringContainsString('Dieta generada por entorno de test', $proposalString);
+    }
+
+    public function testDietUpdateHandlesMalformedJson(): void
+    {
+        $client = $this->createAuthenticatedClient('diet-json-err@test.com');
+
+        $patient = new Patient();
+        $patient->setName('Patient for Diet JSON test');
+        $patient->setMedicalHistoryNumber('PAC-JSON-DIET');
+        $patient->setGender('Masculino');
+        $patient->setBirthDate(new \DateTimeImmutable('1990-01-01'));
+        $this->em->persist($patient);
+
+        $diet = new DietaryPlan();
+        $diet->setName('Diet for JSON test');
+        $diet->setPatient($patient);
+        $diet->setStartDate(new \DateTimeImmutable());
+        $diet->setEndDate(new \DateTimeImmutable('+1 day'));
+        $this->em->persist($diet);
+        $this->em->flush();
+
+        $dietId = (string) $diet->getId();
+        $malformedJson = '{"name": "test",}';
+
+        $client->request('PUT', '/api/diets/' . $dietId, [], [], ['CONTENT_TYPE' => 'application/json'], $malformedJson);
+        // Basado en otros controladores, una JsonException en un payload de actualización resulta en un 500.
+        $this->assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
     }
 }

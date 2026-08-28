@@ -228,7 +228,7 @@ readonly class DietController
                 return new JsonResponse(['error' => 'Pauta nutricional no encontrada.'], Response::HTTP_NOT_FOUND);
             }
 
-            $data = json_decode($request->getContent(), true);
+            $data = json_decode($request->getContent(), true, 512, JSON_THROW_ON_ERROR);
 
             $diet->setKcal((int)($data['kcal'] ?? $diet->getKcal()));
             $diet->setObservations($data['observations'] ?? $diet->getObservations());
@@ -278,6 +278,9 @@ readonly class DietController
             $em->flush();
 
             return new JsonResponse(['message' => 'Pauta actualizada con éxito.'], Response::HTTP_OK);
+        } catch (\JsonException $e) {
+            $logger->warning('JSON malformado en actualización de dieta: ' . $e->getMessage());
+            return new JsonResponse(['error' => 'Payload JSON malformado.'], Response::HTTP_BAD_REQUEST);
         } catch (\Throwable $e) {
             $logger->error('Error updating diet: ' . $e->getMessage() . ' en ' . $e->getFile() . ':' . $e->getLine());
             return new JsonResponse(['error' => 'Error al actualizar la pauta: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);

@@ -42,6 +42,13 @@ class UserControllerTest extends AuthenticatedApiTestCase
         $this->assertNotNull($user);
     }
 
+    public function testGetProfileWithoutAuthFails(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/profile');
+        $this->assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+    }
+
     public function testAdminCanListAllUsers(): void
     {
         // Creamos un cliente autenticado como administrador.
@@ -134,7 +141,7 @@ class UserControllerTest extends AuthenticatedApiTestCase
             [],
             [],
             ['CONTENT_TYPE' => 'application/json'],
-            json_encode(['email' => 'updated.by.admin@test.com', 'roles' => ['ROLE_STAFF']])
+            json_encode(['email' => 'updated.by.admin@test.com', 'roles' => ['ROLE_STAFF'], 'password' => 'new-pass'])
         );
 
         $this->assertResponseIsSuccessful();
@@ -143,6 +150,30 @@ class UserControllerTest extends AuthenticatedApiTestCase
         $updatedUser = $this->em->getRepository(User::class)->find($userId);
         $this->assertSame('updated.by.admin@test.com', $updatedUser->getEmail());
         $this->assertContains('ROLE_STAFF', $updatedUser->getRoles());
+    }
+
+    public function testUpdateOwnProfileWithPassword(): void
+    {
+        $client = $this->createAuthenticatedClient('user-pass-update@test.com');
+        /** @var User $user */
+        $user = $this->em->getRepository(User::class)->findOneBy(['email' => 'user-pass-update@test.com']);
+        $oldPassword = $user->getPassword();
+
+        $client->request(
+            'PUT',
+            '/api/profile',
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            json_encode(['password' => 'new-secure-password'])
+        );
+
+        $this->assertResponseIsSuccessful();
+        $this->em->clear();
+
+        $updatedUser = $this->em->getRepository(User::class)->find($user->getId());
+        $this->assertNotNull($updatedUser);
+        $this->assertNotSame($oldPassword, $updatedUser->getPassword());
     }
 
     public function testAdminCanDeleteUser(): void
