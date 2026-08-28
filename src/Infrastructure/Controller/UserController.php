@@ -14,16 +14,18 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 #[OA\Tag(name: 'Usuarios y Perfil', description: 'Endpoints para la gestión de cuentas, roles y perfil del nutricionista')]
 class UserController extends AbstractController
 {
     public function __construct(
-        private UserRepository $userRepository,
-        private EntityManagerInterface $em
-    ) {}
-
+        private readonly TokenStorageInterface $tokenStorage,
+        private readonly AuthorizationCheckerInterface $authorizationChecker,
+    ) {
+    }
     #[Route('/api/users', name: 'api_users_create', methods: ['POST'])]
     #[IsGranted('ROLE_ADMIN')]
     #[OA\Post(summary: 'Crea un nuevo usuario en el sistema (Solo Administradores)')]
@@ -49,7 +51,12 @@ class UserController extends AbstractController
     )]
     #[OA\Response(response: 400, description: 'Faltan credenciales obligatorias')]
     #[OA\Response(response: 409, description: 'El correo electrónico ya está registrado')]
-    public function create(Request $request, UserPasswordHasherInterface $passwordHasher): JsonResponse
+    public function create(
+        Request $request,
+        UserPasswordHasherInterface $passwordHasher,
+        UserRepository $userRepository,
+        EntityManagerInterface $em
+    ): JsonResponse
     {
         try {
             $payload = json_decode($request->getContent(), true, 512, JSON_THROW_ON_ERROR);
@@ -59,7 +66,7 @@ class UserController extends AbstractController
             }
 
             // Evitar duplicados
-            $existingUser = $this->userRepository->findOneBy(['email' => $payload['email']]);
+            $existingUser = $userRepository->findOneBy(['email' => $payload['email']]);
             if ($existingUser) {
                 return new JsonResponse(['error' => 'El correo electrónico ya está registrado.'], Response::HTTP_CONFLICT);
             }
@@ -80,12 +87,12 @@ class UserController extends AbstractController
             // ✨ LÓGICA DE NEGOCIO: Asociación automática de perfil profesional
             if (in_array('ROLE_NUTRITIONIST', $roles, true)) {
                 $profile = new \App\Infrastructure\Entity\NutritionistProfile();
-                $this->em->persist($profile);
+                $em->persist($profile);
                 $user->setNutritionistProfile($profile);
             }
 
-            $this->em->persist($user);
-            $this->em->flush();
+            $em->persist($user);
+            $em->flush();
 
             return new JsonResponse([
                 'message' => 'Usuario creado con éxito',
@@ -124,10 +131,13 @@ class UserController extends AbstractController
     #[OA\Response(response: 401, description: 'Usuario no autenticado')]
     public function showProfile(): JsonResponse
     {
-        $user = $this->getUser();
+        $token = $this->tokenStorage->getToken();
+        $user = $token ? $token->getUser() : null;
+
         if (!$user) {
             return new JsonResponse(['error' => 'Usuario no autenticado'], Response::HTTP_UNAUTHORIZED);
         }
+
 
         return new JsonResponse(['data' => [
             'id' => (string) $user->getId(),
@@ -151,10 +161,16 @@ class UserController extends AbstractController
         )
     )]
     #[OA\Response(response: 200, description: 'Perfil actualizado con éxito')]
-    public function updateProfile(Request $request, UserPasswordHasherInterface $passwordHasher): JsonResponse
+    public function updateProfile(
+        Request $request,
+        UserPasswordHasherInterface $passwordHasher,
+        EntityManagerInterface $em
+    ): JsonResponse
     {
         /** @var User $user */
-        $user = $this->getUser();
+        $token = $this->tokenStorage->getToken();
+        $user = $token ? $token->getUser() : null;
+
         if (!$user) {
             return new JsonResponse(['error' => 'Usuario no autenticado'], Response::HTTP_UNAUTHORIZED);
         }
@@ -169,7 +185,7 @@ class UserController extends AbstractController
                 $user->setPassword($hashedPassword);
             }
 
-            $this->em->flush();
+            $em->flush();
             return new JsonResponse(['message' => 'Perfil actualizado con éxito'], Response::HTTP_OK);
         } catch (\Throwable $e) {
             return new JsonResponse(['error' => 'Error al actualizar el perfil: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -204,11 +220,12 @@ class UserController extends AbstractController
             ]
         )
     )]
-    public function list(): JsonResponse
+    public function list(UserRepository $userRepository): JsonResponse
     {
-        $currentUser = $this->getUser();
-        /** @var User[] $allUsers */
-        $allUsers = $this->userRepository->findAll();
+        $token = $this->tokenStorage->getToken();
+        $currentUser = $token ? $token->getUser() : null;
+
+        $allUsers = $userRepository->findAll();
         $data = [];
 
         foreach ($allUsers as $user) {
@@ -233,9 +250,9 @@ class UserController extends AbstractController
     #[OA\Parameter(name: 'id', in: 'path', description: 'UUID del usuario', required: true, schema: new OA\Schema(type: 'string'))]
     #[OA\Response(response: 200, description: 'Datos del usuario')]
     #[OA\Response(response: 404, description: 'Usuario no encontrado')]
-    public function show(string $id): JsonResponse
+    public function show(string $id, UserRepository $userRepository): JsonResponse
     {
-        $user = $this->userRepository->find($id);
+        $user = $userRepository->find($id);
         if (!$user) {
             return new JsonResponse(['error' => 'Usuario no encontrado'], Response::HTTP_NOT_FOUND);
         }
@@ -263,10 +280,16 @@ class UserController extends AbstractController
     #[OA\Response(response: 200, description: 'Usuario actualizado con éxito')]
     #[OA\Response(response: 403, description: 'Prohibido quitarse el rol de administrador a uno mismo')]
     #[OA\Response(response: 404, description: 'Usuario no encontrado')]
-    public function update(string $id, Request $request, UserPasswordHasherInterface $passwordHasher): JsonResponse
+    public function update(
+        string $id,
+        Request $request,
+        UserPasswordHasherInterface $passwordHasher,
+        UserRepository $userRepository,
+        EntityManagerInterface $em
+    ): JsonResponse
     {
         try {
-            $user = $this->userRepository->find($id);
+            $user = $userRepository->find($id);
             if (!$user) {
                 return new JsonResponse(['error' => 'Usuario no encontrado'], Response::HTTP_NOT_FOUND);
             }
@@ -275,7 +298,9 @@ class UserController extends AbstractController
             $user->setEmail($payload['email'] ?? $user->getEmail());
             
             if (isset($payload['roles']) && is_array($payload['roles'])) {
-                $currentUser = $this->getUser();
+                $token = $this->tokenStorage->getToken();
+                $currentUser = $token ? $token->getUser() : null;
+
                 if ($currentUser === $user && !in_array('ROLE_ADMIN', $payload['roles'], true)) {
                     return new JsonResponse(['error' => 'Seguridad: No puedes quitarte el rol de Administrador a ti mismo.'], Response::HTTP_FORBIDDEN);
                 }
@@ -287,10 +312,30 @@ class UserController extends AbstractController
                 $user->setPassword($hashedPassword);
             }
 
-            $this->em->flush();
+            $em->flush();
             return new JsonResponse(['message' => 'Usuario actualizado con éxito'], Response::HTTP_OK);
         } catch (\Throwable $e) {
             return new JsonResponse(['error' => 'Error interno al actualizar: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    #[Route('/api/users/{id}', name: 'api_users_delete', methods: ['DELETE'])]
+    #[IsGranted('ROLE_ADMIN')]
+    #[OA\Delete(summary: 'Elimina (borrado lógico) un usuario específico')]
+    #[OA\Parameter(name: 'id', in: 'path', description: 'UUID del usuario a eliminar', required: true, schema: new OA\Schema(type: 'string'))]
+    #[OA\Response(response: 204, description: 'Usuario eliminado con éxito')]
+    #[OA\Response(response: 404, description: 'Usuario no encontrado')]
+    public function delete(string $id, UserRepository $userRepository, EntityManagerInterface $em): Response
+    {
+        $user = $userRepository->find($id);
+
+        if (!$user) {
+            return new JsonResponse(['error' => 'Usuario no encontrado'], Response::HTTP_NOT_FOUND);
+        }
+
+        $user->setDeletedAt(new \DateTimeImmutable());
+        $em->flush();
+
+        return new Response(null, Response::HTTP_NO_CONTENT);
     }
 }

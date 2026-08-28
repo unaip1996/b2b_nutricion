@@ -21,12 +21,6 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[OA\Tag(name: 'Pacientes', description: 'Endpoints para la gestión de expedientes clínicos y biometría')]
 readonly class PatientController
 {
-    public function __construct(
-        private PatientRepository $patientRepository,
-        private AuthorizationCheckerInterface $authChecker,
-        private TokenStorageInterface $tokenStorage,
-    ) {}
-
     #[Route('/api/patients', name: 'api_patients_list', methods: ['GET'])]
     #[IsGranted('ROLE_USER')]
     #[OA\Get(summary: 'Obtiene el listado general de pacientes')]
@@ -48,20 +42,24 @@ readonly class PatientController
             ]
         )
     )]
-    public function list(): JsonResponse
+    public function list(
+        PatientRepository $patientRepository,
+        AuthorizationCheckerInterface $authChecker,
+        TokenStorageInterface $tokenStorage
+    ): JsonResponse
     {
         /** @var Patient[] $patients */
-        if ($this->authChecker->isGranted('ROLE_ADMIN')) {
-            $patients = $this->patientRepository->findAllActive();
+        if ($authChecker->isGranted('ROLE_ADMIN')) {
+            $patients = $patientRepository->findAllActive();
         } else {
-            $user = $this->tokenStorage->getToken()?->getUser();
+            $user = $tokenStorage->getToken()?->getUser();
             $profile = $user->getNutritionistProfile();
             
             if (!$profile) {
                 return new JsonResponse(['data' => []], Response::HTTP_OK);
             }
             
-            $patients = $this->patientRepository->findActiveByProfile($profile);
+            $patients = $patientRepository->findActiveByProfile($profile);
         }
 
         $data = array_map(static function (Patient $patient) {
@@ -105,9 +103,9 @@ readonly class PatientController
     #[OA\Parameter(name: 'id', description: 'UUID del paciente', in: 'path', schema: new OA\Schema(type: 'string'))]
     #[OA\Response(response: 200, description: 'Ficha clínica completa y array de mediciones')]
     #[OA\Response(response: 404, description: 'Paciente no encontrado')]
-    public function show(string $id): JsonResponse
+    public function show(string $id, PatientRepository $patientRepository): JsonResponse
     {
-        $patient = $this->patientRepository->find($id);
+        $patient = $patientRepository->find($id);
 
         if (!$patient) {
             return new JsonResponse(['error' => 'Paciente no encontrado'], Response::HTTP_NOT_FOUND);
@@ -193,10 +191,10 @@ readonly class PatientController
         )
     )]
     #[OA\Response(response: 200, description: 'Paciente actualizado con éxito')]
-    public function update(string $id, Request $request, EntityManagerInterface $em): JsonResponse
+    public function update(string $id, Request $request, EntityManagerInterface $em, PatientRepository $patientRepository): JsonResponse
     {
         try {
-            $patient = $this->patientRepository->find($id);
+            $patient = $patientRepository->find($id);
             if (!$patient) {
                 return new JsonResponse(['error' => 'Paciente no encontrado'], Response::HTTP_NOT_FOUND);
             }
@@ -278,7 +276,7 @@ readonly class PatientController
     #[IsGranted('ROLE_USER')]
     #[OA\Post(summary: 'Crea un nuevo expediente de paciente clínico')]
     #[OA\Response(response: 201, description: 'Paciente creado con éxito, retorna el ID')]
-    public function create(Request $request, EntityManagerInterface $em): JsonResponse
+    public function create(Request $request, EntityManagerInterface $em, TokenStorageInterface $tokenStorage): JsonResponse
     {
         try {
             $payload = json_decode($request->getContent(), true, 512, JSON_THROW_ON_ERROR);
@@ -295,7 +293,7 @@ readonly class PatientController
 
             $patient->setMedicalHistoryNumber('PAC-' . random_int(10000, 99999));
 
-            $user = $this->tokenStorage->getToken()?->getUser();
+            $user = $tokenStorage->getToken()?->getUser();
             $profile = method_exists($user, 'getNutritionistProfile') ? $user->getNutritionistProfile() : null;
             
             if ($profile && method_exists($patient, 'setNutritionistProfile')) {
@@ -358,11 +356,11 @@ readonly class PatientController
     #[IsGranted('ROLE_USER')]
     #[OA\Delete(summary: 'Borrado lógico (Soft Delete) de un paciente y todos sus datos en cascada')]
     #[OA\Parameter(name: 'id', description: 'UUID del paciente', in: 'path', schema: new OA\Schema(type: 'string'))]
-    #[OA\Response(response: 200, description: 'Paciente y datos vinculados eliminados')]
-    public function delete(string $id, EntityManagerInterface $em): JsonResponse
+    #[OA\Response(response: 204, description: 'Paciente y datos vinculados eliminados')]
+    public function delete(string $id, EntityManagerInterface $em, PatientRepository $patientRepository): Response
     {
         try {
-            $patient = $this->patientRepository->find($id);
+            $patient = $patientRepository->find($id);
             if (!$patient) {
                 return new JsonResponse(['error' => 'Paciente no encontrado'], Response::HTTP_NOT_FOUND);
             }
@@ -389,7 +387,7 @@ readonly class PatientController
             }
 
             $em->flush();
-            return new JsonResponse(['message' => 'Paciente y datos vinculados eliminados (Soft Delete)'], Response::HTTP_OK);
+            return new Response(null, Response::HTTP_NO_CONTENT);
         } catch (\Throwable $e) {
             return new JsonResponse(['error' => 'Error al ejecutar borrado: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

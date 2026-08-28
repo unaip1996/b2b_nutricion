@@ -23,11 +23,6 @@ use Throwable;
 #[OA\Tag(name: 'Dietas y Motor RAG', description: 'Endpoints para la generación de dietas mediante Inteligencia Artificial y gestión de pautas')]
 readonly class DietController
 {
-    public function __construct(
-        private GenerateClinicalDietUseCase $generateClinicalDietUseCase,
-        private LoggerInterface $logger,
-    ) {}
-
     #[Route('/api/diets/generate', name: 'api_diets_generate', methods: ['POST'])]
     #[OA\Post(summary: 'Genera una pauta nutricional estructurada utilizando el Motor RAG')]
     #[OA\RequestBody(
@@ -49,7 +44,7 @@ readonly class DietController
         content: new OA\JsonContent(
             properties: [
                 new OA\Property(
-                    property: 'data', 
+                    property: 'data',
                     type: 'object',
                     properties: [
                         new OA\Property(property: 'dietary_proposal', type: 'string', description: 'String JSON con la dieta estructurada')
@@ -60,7 +55,7 @@ readonly class DietController
     )]
     #[OA\Response(response: 400, description: 'Faltan parámetros obligatorios')]
     #[OA\Response(response: 500, description: 'Error interno en el motor de inferencia (LLM)')]
-    public function generateDiet(Request $request, GenerateClinicalDietUseCase $useCase): JsonResponse
+    public function generateDiet(Request $request, GenerateClinicalDietUseCase $generateClinicalDietUseCase): JsonResponse
     {
         try {
             $data = json_decode($request->getContent(), true);
@@ -78,14 +73,13 @@ readonly class DietController
             $startDate = new \DateTimeImmutable($startDateStr);
             $endDate = new \DateTimeImmutable($endDateStr);
 
-            $dietProposal = $useCase->execute($patientId, $query, (int)$kcal, $startDate, $endDate);
+            $dietProposal = $generateClinicalDietUseCase->execute($patientId, $query, (int)$kcal, $startDate, $endDate);
 
             return new JsonResponse([
                 'data' => [
                     'dietary_proposal' => $dietProposal
                 ]
             ], Response::HTTP_OK);
-
         } catch (\Throwable $e) {
             return new JsonResponse([
                 'error' => 'Ha ocurrido un error interno en el motor de IA. Detalles: ' . $e->getMessage()
@@ -102,8 +96,8 @@ readonly class DietController
         content: new OA\JsonContent(
             properties: [
                 new OA\Property(
-                    property: 'data', 
-                    type: 'array', 
+                    property: 'data',
+                    type: 'array',
                     items: new OA\Items(
                         type: 'object',
                         properties: [
@@ -144,13 +138,12 @@ readonly class DietController
                     'id' => $plan->getId()->toRfc4122(),
                     'name' => $plan->getName() ?? '',
                     'createdAt' => $plan->getStartDate() ? $plan->getStartDate()->format('Y-m-d') : date('Y-m-d'),
-                    'kcal' => $plan->getKcal() ?? 2000, 
-                    'status' => $status, 
+                    'kcal' => $plan->getKcal() ?? 2000,
+                    'status' => $status,
                 ];
             }, $diets);
 
             return new JsonResponse(['data' => $data], Response::HTTP_OK);
-
         } catch (\Throwable $e) {
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
@@ -162,7 +155,7 @@ readonly class DietController
     #[OA\Parameter(name: 'id', description: 'UUID de la dieta', in: 'path', required: true, schema: new OA\Schema(type: 'string'))]
     #[OA\Response(response: 200, description: 'Datos detallados de la dieta')]
     #[OA\Response(response: 404, description: 'Pauta nutricional no encontrada')]
-    public function getDietDetail(string $id, EntityManagerInterface $em): JsonResponse
+    public function getDietDetail(string $id, EntityManagerInterface $em, LoggerInterface $logger): JsonResponse
     {
         try {
             $diet = $em->getRepository(DietaryPlan::class)->find($id);
@@ -213,9 +206,8 @@ readonly class DietController
             ];
 
             return new JsonResponse(['data' => $data], Response::HTTP_OK);
-
         } catch (\Throwable $e) {
-            $this->logger->error('Error fetching diet detail: ' . $e->getMessage());
+            $logger->error('Error fetching diet detail: ' . $e->getMessage());
             return new JsonResponse(['error' => 'Error al obtener el detalle de la dieta: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
@@ -227,7 +219,7 @@ readonly class DietController
     #[OA\RequestBody(description: 'Objeto completo de la dieta con las modificaciones', required: true)]
     #[OA\Response(response: 200, description: 'Pauta actualizada con éxito')]
     #[OA\Response(response: 404, description: 'Pauta nutricional no encontrada')]
-    public function updateDiet(string $id, Request $request, EntityManagerInterface $em): JsonResponse
+    public function updateDiet(string $id, Request $request, EntityManagerInterface $em, LoggerInterface $logger): JsonResponse
     {
         try {
             $diet = $em->getRepository(DietaryPlan::class)->find($id);
@@ -236,7 +228,7 @@ readonly class DietController
                 return new JsonResponse(['error' => 'Pauta nutricional no encontrada.'], Response::HTTP_NOT_FOUND);
             }
 
-            $data = json_decode($request->getContent(), true);
+            $data = json_decode($request->getContent(), true, 512, JSON_THROW_ON_ERROR);
 
             $diet->setKcal((int)($data['kcal'] ?? $diet->getKcal()));
             $diet->setObservations($data['observations'] ?? $diet->getObservations());
@@ -251,7 +243,7 @@ readonly class DietController
             }
 
             $diet->getDietDays()->clear();
-            $em->flush(); 
+            $em->flush();
 
             $foodRepo = $em->getRepository(FoodItem::class);
 
@@ -268,7 +260,11 @@ readonly class DietController
 
                     foreach ($mealData['items'] as $itemData) {
                         $foodName = $itemData['foodName'] ?? 'Alimento Desconocido';
-                        $foodItem = $foodRepo->findOneBy(['name' => $foodName]) ?? (new FoodItem())->setName($foodName)->setCategory('Editado Manualmente');
+                        $foodItem = $foodRepo->findOneBy(['name' => $foodName]) ?? (new FoodItem())
+                            ->setName($foodName)
+                            ->setCategory('Editado Manualmente')
+                            ->setKcalPer100g(0.0)
+                            ->setMacros(['proteins' => 0, 'carbs' => 0, 'fats' => 0]);
                         $em->persist($foodItem);
 
                         $mealItem = new MealItem();
@@ -282,9 +278,11 @@ readonly class DietController
             $em->flush();
 
             return new JsonResponse(['message' => 'Pauta actualizada con éxito.'], Response::HTTP_OK);
-
+        } catch (\JsonException $e) {
+            $logger->warning('JSON malformado en actualización de dieta: ' . $e->getMessage());
+            return new JsonResponse(['error' => 'Payload JSON malformado.'], Response::HTTP_BAD_REQUEST);
         } catch (\Throwable $e) {
-            $this->logger->error('Error updating diet: ' . $e->getMessage() . ' en ' . $e->getFile() . ':' . $e->getLine());
+            $logger->error('Error updating diet: ' . $e->getMessage() . ' en ' . $e->getFile() . ':' . $e->getLine());
             return new JsonResponse(['error' => 'Error al actualizar la pauta: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
@@ -308,7 +306,6 @@ readonly class DietController
             $em->flush();
 
             return new JsonResponse(['message' => 'Pauta eliminada correctamente.'], Response::HTTP_OK);
-
         } catch (\Throwable $e) {
             return new JsonResponse(['error' => 'Fallo al eliminar: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

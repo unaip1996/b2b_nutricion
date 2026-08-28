@@ -7,7 +7,6 @@ namespace App\Infrastructure\Controller;
 use App\Application\UseCase\IngestClinicalDocumentUseCase;
 use App\Infrastructure\Entity\ClinicalDocument;
 use App\Infrastructure\Repository\ClinicalDocumentRepository;
-use App\Infrastructure\Repository\DocumentChunkRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use OpenApi\Attributes as OA;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -19,12 +18,6 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[OA\Tag(name: 'Base de Conocimiento (RAG)', description: 'Endpoints para la ingesta, indexación y gestión de documentos clínicos (PDFs)')]
 readonly class IngestionController
 {
-    public function __construct(
-        private DocumentChunkRepository $documentChunkRepository,
-        private IngestClinicalDocumentUseCase $ingestUseCase,
-        private ClinicalDocumentRepository $documentRepository
-    ) {}
-
     #[Route('/api/ingest', name: 'api_ingest_document', methods: ['POST'])]
     #[IsGranted('ROLE_USER')]
     #[OA\Post(summary: 'Sube, extrae texto (OCR/Nativo) y vectoriza un documento clínico (PDF)')]
@@ -56,7 +49,7 @@ readonly class IngestionController
     )]
     #[OA\Response(response: 400, description: 'Petición inválida, falta archivo o no es un formato soportado (PDF)')]
     #[OA\Response(response: 500, description: 'Error en la extracción OCR o en el motor de embeddings')]
-    public function upload(Request $request): JsonResponse
+    public function upload(Request $request, IngestClinicalDocumentUseCase $ingestUseCase): JsonResponse
     {
         $file = $request->files->get('file');
 
@@ -77,7 +70,7 @@ readonly class IngestionController
 
         try {
             // Ejecución global, sin ataduras a pacientes
-            $this->ingestUseCase->execute($file);
+            $ingestUseCase->execute($file);
             
             return new JsonResponse([
                 'message' => 'Guía clínica indexada correctamente en la base de conocimiento global.'
@@ -110,11 +103,11 @@ readonly class IngestionController
             )
         )
     )]
-    public function listDocuments(): JsonResponse
+    public function listDocuments(ClinicalDocumentRepository $documentRepository): JsonResponse
     {
         try {
             // Buscamos todos los documentos clínicos indexados
-            $documents = $this->documentRepository->findAllActive();
+            $documents = $documentRepository->findAllActive();
 
             $data = [];
             foreach ($documents as $doc) {
