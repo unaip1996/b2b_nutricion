@@ -1,0 +1,22 @@
+name: Deploy to VPS Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ejecutar despliegue vía SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ~/b2b_nutricion
+            git pull origin main
+            docker compose up -d --build
+            docker exec nutri_php php bin/console cache:clear --env=prod
