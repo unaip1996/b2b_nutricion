@@ -26,7 +26,7 @@ class MeasureRagLatencyCommand extends Command
         
         // 1. Inyección estricta de parámetros para GenerateClinicalDietUseCase::execute
         // Asumimos el paciente "1" (asegúrate de que este ID existe en tu BD tras el volcado)
-        $patientId = "1"; 
+        $patientId = "019edaa3-dcd9-7f1e-8507-cb5397d28689"; 
         $query = "Generar dieta estándar equilibrada para mantenimiento";
         $kcal = 2000;
         $startDate = new \DateTimeImmutable('tomorrow');
