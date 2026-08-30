@@ -82,7 +82,7 @@ export function PatientDietsSection({ patientId }: { patientId: string }) {
                                         <td className="p-4 text-xs font-mono">
                                             <span className="inline-flex items-center gap-1">
                                                 <Calendar className="h-3 w-3 text-slate-400" />
-                                                {new \DateTime(diet.createdAt).format('d M Y')} {/* Ajustar según formato real */}
+                                                {new Date(diet.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
                                             </span>
                                         </td>
                                         <td className="p-4 font-medium text-slate-900">{diet.kcal} kcal</td>
