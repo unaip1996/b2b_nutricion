@@ -17,6 +17,7 @@ import Link from "next/link";
 
 interface DietPlan {
     id: string;
+    name: string;
     createdAt: string;
     status: string;
     kcal: number;
