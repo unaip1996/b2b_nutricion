@@ -146,7 +146,7 @@ export default function PatientPage() {
             // Cambiamos URL y Método según si estamos editando o creando
             const method = isCreateMode ? "POST" : "PUT";
             const url = isCreateMode
-                ? "${process.env.NEXT_PUBLIC_API_URL}/api/patients"
+                ? `${process.env.NEXT_PUBLIC_API_URL}/api/patients`
                 : `${process.env.NEXT_PUBLIC_API_URL}/api/patients/${id}`;
 
             const response = await fetch(url, {

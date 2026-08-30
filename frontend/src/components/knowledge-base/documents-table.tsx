@@ -27,7 +27,7 @@ export function DocumentsTable() {
                 .find((row) => row.startsWith("auth_token="))
                 ?.split("=")[1];
             const response = await fetch(
-                "${process.env.NEXT_PUBLIC_API_URL}/api/knowledge-base",
+                `${process.env.NEXT_PUBLIC_API_URL}/api/knowledge-base`,
                 {
                     headers: { Authorization: `Bearer ${token}` },
                 },

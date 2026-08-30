@@ -17,7 +17,7 @@ export function LoginCard() {
     setError("");
 
     try {
-      const response = await fetch("${process.env.NEXT_PUBLIC_API_URL}/api/login_check", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/login_check`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

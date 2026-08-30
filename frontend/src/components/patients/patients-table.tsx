@@ -84,7 +84,7 @@ export function PatientsTable() {
         }
 
         // 2. Ejecutar la petición
-        const response = await fetch("${process.env.NEXT_PUBLIC_API_URL}/api/patients", {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`, {
           method: "GET",
           headers: {
             "Authorization": `Bearer ${token}`,

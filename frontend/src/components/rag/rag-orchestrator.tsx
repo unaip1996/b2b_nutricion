@@ -42,7 +42,7 @@ export function RagOrchestrator({ patientId, patientName, patientMetrics }: { pa
         try {
             const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
             
-            const res = await fetch("${process.env.NEXT_PUBLIC_API_URL}/api/diets/generate", {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/diets/generate`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

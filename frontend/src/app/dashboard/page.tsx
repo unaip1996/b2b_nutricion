@@ -49,7 +49,7 @@ export default function DashboardPage() {
                     .find((row) => row.startsWith("auth_token="))
                     ?.split("=")[1];
                 
-                const res = await fetch("${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/stats", {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/stats`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
 
