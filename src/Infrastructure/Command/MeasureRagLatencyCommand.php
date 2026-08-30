@@ -24,18 +24,29 @@ class MeasureRagLatencyCommand extends Command
         $iterations = 10;
         $totalTime = 0;
         
-        // Ajusta los parámetros según lo que exija tu GenerateClinicalDietUseCase.php
-        $patientId = 1; 
-        $prompt = "Generar dieta estándar para mantenimiento de peso";
+        // 1. Inyección estricta de parámetros para GenerateClinicalDietUseCase::execute
+        // Asumimos el paciente "1" (asegúrate de que este ID existe en tu BD tras el volcado)
+        $patientId = "1"; 
+        $query = "Generar dieta estándar equilibrada para mantenimiento";
+        $kcal = 2000;
+        $startDate = new \DateTimeImmutable('tomorrow');
+        $endDate = new \DateTimeImmutable('tomorrow + 6 days'); // 7 días totales
 
-        $output->writeln("Iniciando medición de latencia RAG (Objetivo OE-3) - $iterations iteraciones...");
+        $output->writeln("Iniciando validación OE-3 (RAG < 1500ms) - $iterations iteraciones");
+        $output->writeln("Generando dieta de 7 días, $kcal kcal...");
         $output->writeln("------------------------------------------------------------------");
 
         for ($i = 1; $i <= $iterations; $i++) {
             $start = microtime(true);
 
-            // Ejecutamos el caso de uso principal del RAG
-            $this->generateDietUseCase->execute($patientId, $prompt);
+            // 2. Ejecución del motor RAG completo
+            $this->generateDietUseCase->execute(
+                $patientId, 
+                $query, 
+                $kcal, 
+                $startDate, 
+                $endDate
+            );
 
             $end = microtime(true);
             $latencyMs = round(($end - $start) * 1000, 2);
@@ -44,14 +55,15 @@ class MeasureRagLatencyCommand extends Command
             $output->writeln("Iteración $i: {$latencyMs} ms");
         }
 
+        // 3. Cálculo de métricas
         $average = round($totalTime / $iterations, 2);
         $output->writeln("=================================");
         $output->writeln("Latencia Media: {$average} ms");
         
         if ($average < 1500) {
-            $output->writeln("<info>✓ ÉXITO: El motor RAG cumple el OE-3.</info>");
+            $output->writeln("<info>✓ ÉXITO: El motor RAG cumple el OE-3 holgadamente.</info>");
         } else {
-            $output->writeln("<error>✗ PELIGRO: La latencia supera los 1500 ms.</error>");
+            $output->writeln("<error>✗ ALERTA: La latencia supera los 1500 ms del OE-3.</error>");
         }
 
         return Command::SUCCESS;
