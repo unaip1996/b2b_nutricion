@@ -27,7 +27,7 @@ export function DocumentsTable() {
                 .find((row) => row.startsWith("auth_token="))
                 ?.split("=")[1];
             const response = await fetch(
-                "http://localhost:8000/api/knowledge-base",
+                "${process.env.NEXT_PUBLIC_API_URL}/api/knowledge-base",
                 {
                     headers: { Authorization: `Bearer ${token}` },
                 },
@@ -70,7 +70,7 @@ export function DocumentsTable() {
 
             // 🚨 Apuntamos al endpoint DELETE /api/knowledge-base/{id}
             const response = await fetch(
-                `http://localhost:8000/api/knowledge-base/${documentToDelete.id}`,
+                `${process.env.NEXT_PUBLIC_API_URL}/api/knowledge-base/${documentToDelete.id}`,
                 {
                     method: "DELETE",
                     headers: {

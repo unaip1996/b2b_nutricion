@@ -58,7 +58,7 @@ export default function EditDietPage() {
             setIsLoading(true);
             try {
                 const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
-                const res = await fetch(`http://localhost:8000/api/diets/${dietId}`, {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/diets/${dietId}`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
 
@@ -123,7 +123,7 @@ export default function EditDietPage() {
         setIsSaving(true);
         try {
             const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
-            const res = await fetch(`http://localhost:8000/api/diets/${dietId}`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/diets/${dietId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

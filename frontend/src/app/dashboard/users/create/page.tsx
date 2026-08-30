@@ -6,7 +6,7 @@ export default function CreateUserPage() {
     return (
         <div className="py-6">
             <UserForm 
-                apiUrl="http://localhost:8000/api/users" 
+                apiUrl="${process.env.NEXT_PUBLIC_API_URL}/api/users" 
                 redirectUrl="/dashboard/users" 
                 isProfile={false} 
                 method="POST" 

@@ -20,7 +20,7 @@ export function PatientDietsSection({ patientId }: { patientId: string }) {
         const fetchDiets = async () => {
             try {
                 const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
-                const res = await fetch(`http://localhost:8000/api/patients/${patientId}/diets`, {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/diets`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 if (res.ok) {

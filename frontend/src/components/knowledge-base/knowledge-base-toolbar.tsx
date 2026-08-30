@@ -23,7 +23,7 @@ export function KnowledgeBaseToolbar() {
             const formData = new FormData();
             formData.append("file", file);
 
-            const response = await fetch("http://localhost:8000/api/ingest", {
+            const response = await fetch("${process.env.NEXT_PUBLIC_API_URL}/api/ingest", {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,

@@ -43,7 +43,7 @@ export default function PatientPage() {
                     .find((row) => row.startsWith("auth_token="))
                     ?.split("=")[1];
                 const res = await fetch(
-                    `http://localhost:8000/api/patients/${id}`,
+                    `${process.env.NEXT_PUBLIC_API_URL}/api/patients/${id}`,
                     {
                         headers: { Authorization: `Bearer ${token}` },
                     },
@@ -97,7 +97,7 @@ export default function PatientPage() {
             };
             const token = getCookie("auth_token") || "";
 
-            const response = await fetch(`http://localhost:8000/api/patients/${id}`, {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${id}`, {
                 method: "DELETE",
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -146,8 +146,8 @@ export default function PatientPage() {
             // Cambiamos URL y Método según si estamos editando o creando
             const method = isCreateMode ? "POST" : "PUT";
             const url = isCreateMode
-                ? "http://localhost:8000/api/patients"
-                : `http://localhost:8000/api/patients/${id}`;
+                ? "${process.env.NEXT_PUBLIC_API_URL}/api/patients"
+                : `${process.env.NEXT_PUBLIC_API_URL}/api/patients/${id}`;
 
             const response = await fetch(url, {
                 method: method,

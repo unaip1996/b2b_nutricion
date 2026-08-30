@@ -9,7 +9,7 @@ export default function EditUserPage() {
 
     return (
         <UserForm 
-            apiUrl={`http://localhost:8000/api/users/${id}`}
+            apiUrl={`${process.env.NEXT_PUBLIC_API_URL}/api/users/${id}`}
             redirectUrl="/dashboard/users"
         />
     );

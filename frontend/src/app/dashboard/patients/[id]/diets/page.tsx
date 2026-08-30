@@ -48,7 +48,7 @@ export default function PatientDietsPage() {
 
                 // 1. Recuperar info básica del paciente para la cabecera
                 const patientRes = await fetch(
-                    `http://localhost:8000/api/patients/${patientId}`,
+                    `${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}`,
                     {
                         headers: { Authorization: `Bearer ${token}` },
                     },
@@ -56,7 +56,7 @@ export default function PatientDietsPage() {
 
                 // 2. Recuperar el listado de dietas del paciente
                 const dietsRes = await fetch(
-                    `http://localhost:8000/api/patients/${patientId}/diets`,
+                    `${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/diets`,
                     {
                         headers: { Authorization: `Bearer ${token}` },
                     },
@@ -100,7 +100,7 @@ export default function PatientDietsPage() {
                 .find((row) => row.startsWith("auth_token="))
                 ?.split("=")[1];
             const res = await fetch(
-                `http://localhost:8000/api/diets/${dietId}`,
+                `${process.env.NEXT_PUBLIC_API_URL}/api/diets/${dietId}`,
                 {
                     method: "DELETE",
                     headers: { Authorization: `Bearer ${token}` },
