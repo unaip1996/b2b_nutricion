@@ -23,45 +23,40 @@ readonly class PatientController
 {
     #[Route('/api/patients', name: 'api_patients_list', methods: ['GET'])]
     #[IsGranted('ROLE_USER')]
-    #[OA\Get(summary: 'Obtiene el listado general de pacientes')]
-    #[OA\Response(
-        response: 200,
-        description: 'Array de pacientes activos filtrados por el perfil del nutricionista autenticado',
-        content: new OA\JsonContent(
-            type: 'object',
-            properties: [
-                new OA\Property(property: 'data', type: 'array', items: new OA\Items(
-                    type: 'object',
-                    properties: [
-                        new OA\Property(property: 'id', type: 'string', example: '123e4567-e89b-12d3-a456-426614174000'),
-                        new OA\Property(property: 'medicalHistoryNumber', type: 'string', example: 'PAC-12345'),
-                        new OA\Property(property: 'name', type: 'string', example: 'Unai Pérez'),
-                        new OA\Property(property: 'bmi', type: 'number', example: 24.5)
-                    ]
-                ))
-            ]
-        )
-    )]
+    #[OA\Get(summary: 'Obtiene el listado general de pacientes paginado y filtrado')]
+    // ... tus anotaciones OA\Response
     public function list(
+        Request $request, // <-- AÑADIDO PARA LEER LA URL
         PatientRepository $patientRepository,
         AuthorizationCheckerInterface $authChecker,
         TokenStorageInterface $tokenStorage
     ): JsonResponse
     {
-        /** @var Patient[] $patients */
-        if ($authChecker->isGranted('ROLE_ADMIN')) {
-            $patients = $patientRepository->findAllActive();
-        } else {
+        // 1. Leer parámetros de paginación y filtros de la URL
+        $page = $request->query->getInt('page', 1);
+        $itemsPerPage = $request->query->getInt('itemsPerPage', 5);
+        $filters = [
+            'medicalId' => $request->query->get('medicalId'),
+            'name' => $request->query->get('name'),
+            'condition' => $request->query->get('mainCondition'),
+            'objective' => $request->query->get('objective'),
+        ];
+
+        // 2. Control de Acceso
+        $profile = null;
+        if (!$authChecker->isGranted('ROLE_ADMIN')) {
             $user = $tokenStorage->getToken()?->getUser();
             $profile = $user->getNutritionistProfile();
             
             if (!$profile) {
-                return new JsonResponse(['data' => []], Response::HTTP_OK);
+                return new JsonResponse(['data' => [], 'total' => 0], Response::HTTP_OK);
             }
-            
-            $patients = $patientRepository->findActiveByProfile($profile);
         }
 
+        // 3. Consulta a base de datos
+        $result = $patientRepository->searchAndPaginateActive($profile, $filters, $page, $itemsPerPage);
+
+        // 4. Mapeo de datos (Tu código original intacto)
         $data = array_map(static function (Patient $patient) {
             $age = $patient->getBirthDate() !== null ? $patient->getBirthDate()->diff(new \DateTimeImmutable())->y : null;
             
@@ -92,9 +87,13 @@ readonly class PatientController
                 'goal' => method_exists($patient, 'getNutritionalGoal') ? $patient->getNutritionalGoal() : null,
                 'isAllergy' => method_exists($patient, 'getAllergies') ? count($patient->getAllergies()) > 0 : false,
             ];
-        }, $patients);
+        }, $result['items']);
 
-        return new JsonResponse(['data' => $data], Response::HTTP_OK);
+        // Devolvemos el array de datos y el total para la paginación de Next.js
+        return new JsonResponse([
+            'data' => $data, 
+            'total' => $result['total']
+        ], Response::HTTP_OK);
     }
 
     #[Route('/api/patients/{id}', name: 'api_patients_show', methods: ['GET'])]
