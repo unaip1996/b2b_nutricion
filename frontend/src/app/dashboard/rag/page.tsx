@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { fetchWithAuth } from "@/lib/auth";
 import {
     BrainCircuit,
     Loader2,
@@ -52,13 +53,7 @@ function RagContent() {
         const loadPatients = async () => {
             setIsLoadingPatients(true);
             try {
-                const token = document.cookie
-                    .split("; ")
-                    .find((row) => row.startsWith("auth_token="))
-                    ?.split("=")[1];
-                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
+                const res = await fetchWithAuth(`/api/patients`);
 
                 if (res.ok) {
                     const result = await res.json();
@@ -112,16 +107,8 @@ function RagContent() {
         setIsGenerating(true);
 
         try {
-            const token = document.cookie
-                .split("; ")
-                .find((row) => row.startsWith("auth_token="))
-                ?.split("=")[1];
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/diets/generate`, {
+            const res = await fetchWithAuth(`/api/diets/generate`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
                 body: JSON.stringify({
                     patientId: selectedPatientId,
                     query: query,

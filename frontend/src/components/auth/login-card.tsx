@@ -2,6 +2,7 @@
 import { useState } from "react"
 import { Lock } from "lucide-react"
 import { useRouter } from "next/navigation";
+import { fetchWithAuth } from "@/lib/auth";
 
 export function LoginCard() {
   const router = useRouter();
@@ -17,11 +18,8 @@ export function LoginCard() {
     setError("");
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/login_check`, {
+      const response = await fetchWithAuth(`/api/login_check`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({ username: email, password: password }),
       });
 

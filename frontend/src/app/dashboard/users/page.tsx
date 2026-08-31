@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Users, Shield, ShieldCheck, Edit2, Plus } from "lucide-react";
+import { fetchWithAuth } from "@/lib/auth";
 
 interface UserRow {
     id: string;
@@ -19,16 +20,7 @@ export default function UsersListPage() {
     useEffect(() => {
         const fetchUsers = async () => {
             try {
-                const token = document.cookie
-                    .split("; ")
-                    .find((row) => row.startsWith("auth_token="))
-                    ?.split("=")[1];
-                const response = await fetch(
-                    `${process.env.NEXT_PUBLIC_API_URL}/api/users`,
-                    {
-                        headers: { Authorization: `Bearer ${token}` },
-                    },
-                );
+                const response = await fetchWithAuth(`/api/users`);
                 if (response.ok) {
                     const { data } = await response.json();
                     setUsers(data);
