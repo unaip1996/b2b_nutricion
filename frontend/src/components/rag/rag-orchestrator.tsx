@@ -12,6 +12,7 @@ import {
     Sparkles
 } from "lucide-react";
 import { GeneratedDietDisplay } from "./generated-diet-display";
+import { fetchWithAuth } from "@/lib/auth";
 
 // Este componente ahora asume que recibe los datos del paciente desde la página padre
 export function RagOrchestrator({ patientId, patientName, patientMetrics }: { patientId: string, patientName: string, patientMetrics: string }) {
