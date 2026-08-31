@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Save, UserCheck, Key, Shield, User as UserIcon } from "lucide-react";
-
+import { Save, UserCheck, Key, Shield, User as UserIcon } from "lucide-react";import { fetchWithAuth } from "@/lib/auth";
 interface UserFormProps {
     apiUrl: string;
     redirectUrl: string;
@@ -34,10 +33,7 @@ export function UserForm({ apiUrl, redirectUrl, isProfile = false, method = "PUT
             setIsFetching(true); 
             const fetchUser = async () => {
                 try {
-                    const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
-                    const res = await fetch(apiUrl, {
-                        headers: { Authorization: `Bearer ${token}` },
-                    });
+                    const res = await fetchWithAuth(apiUrl);
                     if (res.ok) {
                         const { data } = await res.json();
                         setFormData({
@@ -69,17 +65,12 @@ export function UserForm({ apiUrl, redirectUrl, isProfile = false, method = "PUT
         setErrorMsg("");
 
         try {
-            const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
             const payload = isProfile 
                 ? { email: formData.email, password: formData.password }
                 : formData;
 
-            const response = await fetch(apiUrl, {
+            const response = await fetchWithAuth(apiUrl, {
                 method: method,
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
                 body: JSON.stringify(payload),
             });
 

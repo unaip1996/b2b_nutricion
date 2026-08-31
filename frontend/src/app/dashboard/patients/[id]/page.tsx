@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { fetchWithAuth } from "@/lib/auth";
 import { PatientHeader } from "@/components/clinical/patient-header";
 import { PersonalDataColumn } from "@/components/clinical/personal-data-column";
 import { ClinicalHistoryColumn } from "@/components/clinical/clinical-history-column";
@@ -38,16 +39,7 @@ export default function PatientPage() {
 
         const fetchPatient = async () => {
             try {
-                const token = document.cookie
-                    .split("; ")
-                    .find((row) => row.startsWith("auth_token="))
-                    ?.split("=")[1];
-                const res = await fetch(
-                    `${process.env.NEXT_PUBLIC_API_URL}/api/patients/${id}`,
-                    {
-                        headers: { Authorization: `Bearer ${token}` },
-                    },
-                );
+                const res = await fetchWithAuth(`/api/patients/${id}`);
 
                 if (res.ok) {
                     const { data } = await res.json();
@@ -89,19 +81,8 @@ export default function PatientPage() {
 
         setIsLoading(true);
         try {
-            const getCookie = (name: string) => {
-                const value = `; ${document.cookie}`;
-                const parts = value.split(`; ${name}=`);
-                if (parts.length === 2) return parts.pop()?.split(";").shift();
-                return "";
-            };
-            const token = getCookie("auth_token") || "";
-
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${id}`, {
+            const response = await fetchWithAuth(`/api/patients/${id}`, {
                 method: "DELETE",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
             });
 
             if (response.ok) {
@@ -145,16 +126,12 @@ export default function PatientPage() {
 
             // Cambiamos URL y Método según si estamos editando o creando
             const method = isCreateMode ? "POST" : "PUT";
-            const url = isCreateMode
-                ? `${process.env.NEXT_PUBLIC_API_URL}/api/patients`
-                : `${process.env.NEXT_PUBLIC_API_URL}/api/patients/${id}`;
+            const endpoint = isCreateMode
+                ? `/api/patients`
+                : `/api/patients/${id}`;
 
-            const response = await fetch(url, {
+            const response = await fetchWithAuth(endpoint, {
                 method: method,
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
                 body: JSON.stringify(payload),
             });
 

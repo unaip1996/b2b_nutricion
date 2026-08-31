@@ -2,8 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { FileSpreadsheet, Plus, Calendar, Eye, ShieldCheck } from "lucide-react";
-import { useState, useEffect } from "react";
-
+import { useState, useEffect } from "react";import { fetchWithAuth } from "@/lib/auth";
 interface DietPlan {
     id: string;
     createdAt: string;
@@ -19,13 +18,11 @@ export function PatientDietsSection({ patientId }: { patientId: string }) {
     useEffect(() => {
         const fetchDiets = async () => {
             try {
-                const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
-                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/diets`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await fetchWithAuth(`/api/patients/${patientId}/diets`);
                 if (res.ok) {
                     const result = await res.json();
-                    setDiets(result.data);
+                    // API Platform devuelve los resultados en hydra:member (JSON-LD)
+                    setDiets(result['hydra:member'] || result.data || []);
                 }
             } catch (error) {
                 console.error("Error al recuperar las dietas del paciente:", error);

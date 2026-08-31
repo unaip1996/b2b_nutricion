@@ -2,7 +2,7 @@
 
 import { FileText, Database, Trash2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
-
+import { fetchWithAuth } from "@/lib/auth";
 interface ClinicalDocument {
     id: string;
     title: string;
@@ -22,16 +22,7 @@ export function DocumentsTable() {
     const fetchDocuments = async () => {
         setIsLoading(true);
         try {
-            const token = document.cookie
-                .split("; ")
-                .find((row) => row.startsWith("auth_token="))
-                ?.split("=")[1];
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/api/knowledge-base`,
-                {
-                    headers: { Authorization: `Bearer ${token}` },
-                },
-            );
+            const response = await fetchWithAuth(`/api/knowledge-base`);
             const result = await response.json();
             
             // El nuevo controlador de Symfony devuelve directamente un array JSON
@@ -63,21 +54,10 @@ export function DocumentsTable() {
         setIsDeleting(true);
 
         try {
-            const token = document.cookie
-                .split("; ")
-                .find((row) => row.startsWith("auth_token="))
-                ?.split("=")[1];
-
             // 🚨 Apuntamos al endpoint DELETE /api/knowledge-base/{id}
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/api/knowledge-base/${documentToDelete.id}`,
-                {
-                    method: "DELETE",
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
-            );
+            const response = await fetchWithAuth(`/api/knowledge-base/${documentToDelete.id}`, {
+                method: "DELETE",
+            });
 
             if (response.ok) {
                 setDocumentToDelete(null);

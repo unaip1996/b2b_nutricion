@@ -3,6 +3,7 @@
 import { Search, Upload, Loader2 } from "lucide-react";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { fetchWithAuth } from "@/lib/auth";
 
 export function KnowledgeBaseToolbar() {
     const router = useRouter();
@@ -19,15 +20,11 @@ export function KnowledgeBaseToolbar() {
         setIsUploading(true);
 
         try {
-            const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
             const formData = new FormData();
             formData.append("file", file);
 
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/ingest`, {
+            const response = await fetchWithAuth(`/api/ingest`, {
                 method: "POST",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
                 body: formData,
             });
 

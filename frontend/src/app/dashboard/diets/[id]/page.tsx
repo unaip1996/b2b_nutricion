@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { fetchWithAuth } from "@/lib/auth";
 import { 
     Loader2, Save, ChevronLeft, Calendar, Flame, 
     Trash2, PlusCircle, Clock, Utensils, Info 
@@ -57,10 +58,7 @@ export default function EditDietPage() {
         const fetchDiet = async () => {
             setIsLoading(true);
             try {
-                const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
-                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/diets/${dietId}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
+                const res = await fetchWithAuth(`/api/diets/${dietId}`);
 
                 if (res.ok) {
                     const { data } = await res.json();
@@ -122,13 +120,8 @@ export default function EditDietPage() {
         if (!diet) return;
         setIsSaving(true);
         try {
-            const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/diets/${dietId}`, {
+            const res = await fetchWithAuth(`/api/diets/${dietId}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
                 body: JSON.stringify(diet)
             });
 

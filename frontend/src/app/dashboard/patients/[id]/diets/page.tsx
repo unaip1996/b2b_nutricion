@@ -14,7 +14,7 @@ import {
     Trash2,
 } from "lucide-react";
 import Link from "next/link";
-
+import { fetchWithAuth } from "@/lib/auth";
 interface DietPlan {
     id: string;
     name: string;
@@ -41,26 +41,10 @@ export default function PatientDietsPage() {
         const fetchPatientAndDiets = async () => {
             setIsLoading(true);
             try {
-                const token = document.cookie
-                    .split("; ")
-                    .find((row) => row.startsWith("auth_token="))
-                    ?.split("=")[1];
-
-                // 1. Recuperar info básica del paciente para la cabecera
-                const patientRes = await fetch(
-                    `${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}`,
-                    {
-                        headers: { Authorization: `Bearer ${token}` },
-                    },
-                );
+                const patientRes = await fetchWithAuth(`/api/patients/${patientId}`);
 
                 // 2. Recuperar el listado de dietas del paciente
-                const dietsRes = await fetch(
-                    `${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/diets`,
-                    {
-                        headers: { Authorization: `Bearer ${token}` },
-                    },
-                );
+                const dietsRes = await fetchWithAuth(`/api/patients/${patientId}/diets`);
 
                 if (patientRes.ok) {
                     const pData = await patientRes.json();
@@ -74,7 +58,8 @@ export default function PatientDietsPage() {
 
                 if (dietsRes.ok) {
                     const dData = await dietsRes.json();
-                    setDiets(dData.data || []);
+                    // API Platform devuelve los resultados en hydra:member (JSON-LD)
+                    setDiets(dData['hydra:member'] || dData.data || []);
                 }
             } catch (error) {
                 console.error("Error al cargar el CRUD de dietas:", error);
@@ -95,17 +80,9 @@ export default function PatientDietsPage() {
         if (!confirmDelete) return;
 
         try {
-            const token = document.cookie
-                .split("; ")
-                .find((row) => row.startsWith("auth_token="))
-                ?.split("=")[1];
-            const res = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/api/diets/${dietId}`,
-                {
-                    method: "DELETE",
-                    headers: { Authorization: `Bearer ${token}` },
-                },
-            );
+            const res = await fetchWithAuth(`/api/diets/${dietId}`, {
+                method: "DELETE",
+            });
 
             if (res.ok) {
                 // Actualizamos el estado local para que desaparezca sin tener que recargar la página entera

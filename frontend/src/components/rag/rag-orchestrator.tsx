@@ -40,14 +40,8 @@ export function RagOrchestrator({ patientId, patientName, patientMetrics }: { pa
         setIsGenerating(true);
 
         try {
-            const token = document.cookie.split("; ").find(row => row.startsWith("auth_token="))?.split("=")[1];
-            
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/diets/generate`, {
+            const res = await fetchWithAuth(`/api/diets/generate`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`
-                },
                 body: JSON.stringify({
                     patientId: patientId, // ID inyectado automáticamente
                     query: query,         // La directriz del nutricionista

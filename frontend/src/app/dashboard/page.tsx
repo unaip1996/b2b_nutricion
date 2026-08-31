@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
+import { fetchWithAuth } from "@/lib/auth";
 
 interface DashboardData {
     kpis: {
@@ -44,14 +45,7 @@ export default function DashboardPage() {
         const fetchDashboardStats = async () => {
             setIsLoading(true);
             try {
-                const token = document.cookie
-                    .split("; ")
-                    .find((row) => row.startsWith("auth_token="))
-                    ?.split("=")[1];
-                
-                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/stats`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
+                const res = await fetchWithAuth(`/api/dashboard/stats`);
 
                 if (res.ok) {
                     const result = await res.json();
