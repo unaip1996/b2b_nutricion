@@ -85,32 +85,49 @@ readonly class IngestionController
 
     #[Route('/api/knowledge-base', name: 'api_knowledge_base_list', methods: ['GET'])]
     #[IsGranted('ROLE_USER')]
-    #[OA\Get(summary: 'Lista todos los documentos clínicos activos y disponibles para el LLM')]
+    #[OA\Get(summary: 'Lista todos los documentos clínicos activos y disponibles para el LLM con paginación y filtrado')]
+    #[OA\QueryParameter(name: 'page', description: 'Página actual (por defecto 1)', schema: new OA\Schema(type: 'integer', default: 1))]
+    #[OA\QueryParameter(name: 'itemsPerPage', description: 'Registros por página (por defecto 5)', schema: new OA\Schema(type: 'integer', default: 5))]
+    #[OA\QueryParameter(name: 'title', description: 'Filtro por título del documento', schema: new OA\Schema(type: 'string'))]
     #[OA\Response(
         response: 200,
-        description: 'Array con el listado de documentos indexados',
+        description: 'Array con el listado de documentos indexados paginado',
         content: new OA\JsonContent(
-            type: 'array',
-            items: new OA\Items(
-                type: 'object',
-                properties: [
-                    new OA\Property(property: 'id', type: 'string', example: '123e4567-e89b-12d3-a456-426614174000'),
-                    new OA\Property(property: 'title', type: 'string', example: 'guia_obesidad_2025.pdf'),
-                    new OA\Property(property: 'chunksCount', type: 'integer', description: 'Número de fragmentos vectoriales generados', example: 45),
-                    new OA\Property(property: 'uploadedAt', type: 'string', format: 'date-time'),
-                    new OA\Property(property: 'status', type: 'string', example: 'indexed')
-                ]
-            )
+            properties: [
+                new OA\Property(
+                    property: 'data',
+                    type: 'array',
+                    items: new OA\Items(
+                        type: 'object',
+                        properties: [
+                            new OA\Property(property: 'id', type: 'string', example: '123e4567-e89b-12d3-a456-426614174000'),
+                            new OA\Property(property: 'title', type: 'string', example: 'guia_obesidad_2025.pdf'),
+                            new OA\Property(property: 'chunksCount', type: 'integer', description: 'Número de fragmentos vectoriales generados', example: 45),
+                            new OA\Property(property: 'uploadedAt', type: 'string', format: 'date-time'),
+                            new OA\Property(property: 'status', type: 'string', example: 'indexed')
+                        ]
+                    )
+                ),
+                new OA\Property(property: 'total', type: 'integer', description: 'Total de documentos que coinciden con los filtros')
+            ]
         )
     )]
-    public function listDocuments(ClinicalDocumentRepository $documentRepository): JsonResponse
+    public function listDocuments(Request $request, ClinicalDocumentRepository $documentRepository): JsonResponse
     {
         try {
-            // Buscamos todos los documentos clínicos indexados
-            $documents = $documentRepository->findAllActive();
+            // Leer parámetros de paginación y filtros
+            $page = $request->query->getInt('page', 1);
+            $itemsPerPage = $request->query->getInt('itemsPerPage', 5);
+            $filters = [
+                'title' => $request->query->get('title'),
+            ];
 
+            // Consultar documentos con paginación y filtrado
+            $result = $documentRepository->searchAndPaginateActive($filters, $page, $itemsPerPage);
+
+            // Mapear datos
             $data = [];
-            foreach ($documents as $doc) {
+            foreach ($result['items'] as $doc) {
                 $data[] = [
                     'id' => $doc->getId()->toString(),
                     'title' => $doc->getFileName(),
@@ -120,7 +137,10 @@ readonly class IngestionController
                 ];
             }
 
-            return new JsonResponse($data, Response::HTTP_OK);
+            return new JsonResponse([
+                'data' => $data,
+                'total' => $result['total']
+            ], Response::HTTP_OK);
         } catch (\Exception $e) {
             return new JsonResponse([
                 'error' => 'Error al recuperar la base de conocimiento',
