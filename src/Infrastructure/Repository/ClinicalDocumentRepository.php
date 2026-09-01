@@ -24,7 +24,7 @@ class ClinicalDocumentRepository extends ServiceEntityRepository
     }
 
     /**
-     * Devuelve todos los pacientes que no han sido eliminados (Soft Delete)
+     * Devuelve todos los documentos que no han sido eliminados (Soft Delete)
      * * @return ClinicalDocument[]
      */
     public function findAllActive(): array
@@ -35,5 +35,40 @@ class ClinicalDocumentRepository extends ServiceEntityRepository
             ->orderBy('p.id', 'DESC') 
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * Devuelve los documentos activos paginados y filtrados.
+     * Implementa búsqueda por título de documento.
+     */
+    public function searchAndPaginateActive(array $filters, int $page, int $itemsPerPage): array
+    {
+        $qb = $this->createQueryBuilder('d')
+            ->andWhere('d.deletedAt IS NULL')
+            ->orderBy('d.ingestedAt', 'DESC');
+
+        // Aplicar filtro de búsqueda por nombre de archivo
+        if (!empty($filters['title'])) {
+            $qb->andWhere('LOWER(d.fileName) LIKE LOWER(:title)')
+               ->setParameter('title', '%' . strtolower($filters['title']) . '%');
+        }
+
+        // Calcular offset y limit
+        $offset = ($page - 1) * $itemsPerPage;
+        
+        // Obtener el total de resultados
+        $countQb = clone $qb;
+        $total = count($countQb->getQuery()->getResult());
+
+        // Aplicar paginación
+        $qb->setFirstResult($offset)
+           ->setMaxResults($itemsPerPage);
+
+        $items = $qb->getQuery()->getResult();
+
+        return [
+            'items' => $items,
+            'total' => $total,
+        ];
     }
 }

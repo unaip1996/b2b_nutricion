@@ -132,6 +132,7 @@ class UserController extends AbstractController
     public function showProfile(): JsonResponse
     {
         $token = $this->tokenStorage->getToken();
+        /** @var User|null $user */
         $user = $token ? $token->getUser() : null;
 
         if (!$user) {
@@ -167,8 +168,8 @@ class UserController extends AbstractController
         EntityManagerInterface $em
     ): JsonResponse
     {
-        /** @var User $user */
         $token = $this->tokenStorage->getToken();
+        /** @var User|null $user */
         $user = $token ? $token->getUser() : null;
 
         if (!$user) {
@@ -198,10 +199,14 @@ class UserController extends AbstractController
 
     #[Route('/api/users', name: 'api_users_list', methods: ['GET'])]
     #[IsGranted('ROLE_ADMIN')]
-    #[OA\Get(summary: 'Lista todos los usuarios registrados en la plataforma (Excluye al administrador actual)')]
+    #[OA\Get(summary: 'Lista todos los usuarios registrados en la plataforma con paginación y filtrado (Excluye al administrador actual)')]
+    #[OA\QueryParameter(name: 'page', description: 'Página actual (por defecto 1)', schema: new OA\Schema(type: 'integer', default: 1))]
+    #[OA\QueryParameter(name: 'itemsPerPage', description: 'Registros por página (por defecto 5)', schema: new OA\Schema(type: 'integer', default: 5))]
+    #[OA\QueryParameter(name: 'email', description: 'Filtro por email', schema: new OA\Schema(type: 'string'))]
+    #[OA\QueryParameter(name: 'role', description: 'Filtro por rol (ROLE_ADMIN, ROLE_NUTRITIONIST)', schema: new OA\Schema(type: 'string'))]
     #[OA\Response(
         response: 200, 
-        description: 'Array de usuarios',
+        description: 'Array de usuarios paginado',
         content: new OA\JsonContent(
             properties: [
                 new OA\Property(
@@ -216,19 +221,32 @@ class UserController extends AbstractController
                             new OA\Property(property: 'lastLogin', type: 'string', format: 'date-time', nullable: true)
                         ]
                     )
-                )
+                ),
+                new OA\Property(property: 'total', type: 'integer', description: 'Total de usuarios que coinciden con los filtros')
             ]
         )
     )]
-    public function list(UserRepository $userRepository): JsonResponse
+    public function list(Request $request, UserRepository $userRepository): JsonResponse
     {
         $token = $this->tokenStorage->getToken();
+        /** @var User|null $currentUser */
         $currentUser = $token ? $token->getUser() : null;
 
-        $allUsers = $userRepository->findAll();
-        $data = [];
+        // Leer parámetros de paginación y filtros
+        $page = $request->query->getInt('page', 1);
+        $itemsPerPage = $request->query->getInt('itemsPerPage', 5);
+        $filters = [
+            'email' => $request->query->get('email'),
+            'role' => $request->query->get('role'),
+        ];
 
-        foreach ($allUsers as $user) {
+        // Consultar usuarios con paginación y filtrado
+        $result = $userRepository->searchAndPaginateActive($filters, $page, $itemsPerPage);
+
+        // Mapear datos (excluyendo el usuario actual)
+        $data = [];
+        /** @var User $user */
+        foreach ($result['items'] as $user) {
             if ($currentUser && $user->getId() === $currentUser->getId()) {
                 continue;
             }
@@ -241,7 +259,10 @@ class UserController extends AbstractController
             ];
         }
 
-        return new JsonResponse(['data' => $data], Response::HTTP_OK);
+        return new JsonResponse([
+            'data' => $data,
+            'total' => $result['total']
+        ], Response::HTTP_OK);
     }
 
     #[Route('/api/users/{id}', name: 'api_users_show', methods: ['GET'])]

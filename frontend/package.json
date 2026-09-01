@@ -10,10 +10,13 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
+    "lucide-react": "latest",
+    "recharts": "^3.10.1",
+    "tailwindcss": "^4.3.1",
     "@base-ui/react": "^1.7.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^1.20.0",
     "next": "16.2.9",
     "radix-ui": "^1.6.0",
     "react": "19.2.4",

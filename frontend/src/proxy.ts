@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   // Aquí leemos la cookie donde en el futuro guardaremos el JWT de tu backend en Symfony
   const token = request.cookies.get('auth_token')?.value;
   
