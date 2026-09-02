@@ -21,6 +21,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 #[OA\Tag(name: 'Usuarios y Perfil', description: 'Endpoints para la gestión de cuentas, roles y perfil del nutricionista')]
 class UserController extends AbstractController
 {
+    const DEFAULT_ITEMS_PER_PAGE = 10;
+
     public function __construct(
         private readonly TokenStorageInterface $tokenStorage,
         private readonly AuthorizationCheckerInterface $authorizationChecker,
@@ -234,7 +236,7 @@ class UserController extends AbstractController
 
         // Leer parámetros de paginación y filtros
         $page = $request->query->getInt('page', 1);
-        $itemsPerPage = $request->query->getInt('itemsPerPage', 5);
+        $itemsPerPage = $request->query->getInt('itemsPerPage', self::DEFAULT_ITEMS_PER_PAGE);
         $filters = [
             'email' => $request->query->get('email'),
             'role' => $request->query->get('role'),

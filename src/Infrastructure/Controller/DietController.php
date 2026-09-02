@@ -10,6 +10,7 @@ use App\Infrastructure\Entity\DietaryPlan;
 use App\Infrastructure\Entity\FoodItem;
 use App\Infrastructure\Entity\Meal;
 use App\Infrastructure\Entity\MealItem;
+use App\Infrastructure\Repository\DietaryPlanRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use OpenApi\Attributes as OA;
 use Psr\Log\LoggerInterface;
@@ -23,6 +24,8 @@ use Throwable;
 #[OA\Tag(name: 'Dietas y Motor RAG', description: 'Endpoints para la generación de dietas mediante Inteligencia Artificial y gestión de pautas')]
 readonly class DietController
 {
+    const DEFAULT_ITEMS_PER_PAGE = 10;
+
     #[Route('/api/diets/generate', name: 'api_diets_generate', methods: ['POST'])]
     #[OA\Post(summary: 'Genera una pauta nutricional estructurada utilizando el Motor RAG')]
     #[OA\RequestBody(
@@ -87,9 +90,13 @@ readonly class DietController
         }
     }
 
+
     #[Route('/api/patients/{patientId}/diets', name: 'api_patient_diets_list', methods: ['GET'])]
-    #[OA\Get(summary: 'Lista el historial de dietas generadas para un paciente específico')]
+    #[OA\Get(summary: 'Lista el historial de dietas generadas para un paciente específico con paginación y filtrado')]
     #[OA\Parameter(name: 'patientId', description: 'UUID del paciente', in: 'path', required: true, schema: new OA\Schema(type: 'string'))]
+    #[OA\Parameter(name: 'page', description: 'Número de página', in: 'query', required: false, schema: new OA\Schema(type: 'integer', default: 1))]
+    #[OA\Parameter(name: 'itemsPerPage', description: 'Elementos por página', in: 'query', required: false, schema: new OA\Schema(type: 'integer', default: 5))]
+    #[OA\Parameter(name: 'name', description: 'Filtro por nombre de dieta', in: 'query', required: false, schema: new OA\Schema(type: 'string'))]
     #[OA\Response(
         response: 200,
         description: 'Array con el listado de dietas del paciente',
@@ -108,17 +115,25 @@ readonly class DietController
                             new OA\Property(property: 'status', type: 'string', example: 'Activo')
                         ]
                     )
-                )
+                ),
+                new OA\Property(property: 'total', type: 'integer')
             ]
         )
     )]
-    public function listPatientDiets(string $patientId, EntityManagerInterface $em): JsonResponse
+    public function listPatientDiets(string $patientId, Request $request, DietaryPlanRepository $dietRepository): JsonResponse
     {
         try {
-            $diets = $em->getRepository(DietaryPlan::class)->findBy([
-                'patient' => $patientId,
-                'deletedAt' => null
-            ]);
+            $page = max(1, (int)($request->query->get('page', 1)));
+            $itemsPerPage = (int)($request->query->get('itemsPerPage', self::DEFAULT_ITEMS_PER_PAGE));
+            
+            $filters = [
+                'name' => $request->query->get('name', ''),
+                'createdAt' => $request->query->get('createdAt', ''),
+                'kcal' => $request->query->get('kcal', ''),
+                'status' => $request->query->get('status', ''),
+            ];
+
+            $result = $dietRepository->searchAndPaginateByPatient($patientId, $filters, $page, $itemsPerPage);
 
             $now = new \DateTimeImmutable();
 
@@ -141,9 +156,12 @@ readonly class DietController
                     'kcal' => $plan->getKcal() ?? 2000,
                     'status' => $status,
                 ];
-            }, $diets);
+            }, $result['items']);
 
-            return new JsonResponse(['data' => $data], Response::HTTP_OK);
+            return new JsonResponse([
+                'data' => $data,
+                'total' => $result['total'],
+            ], Response::HTTP_OK);
         } catch (\Throwable $e) {
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

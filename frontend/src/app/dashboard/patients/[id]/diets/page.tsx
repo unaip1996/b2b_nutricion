@@ -3,25 +3,13 @@
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-    FileSpreadsheet,
     Plus,
-    Calendar,
-    Eye,
-    ShieldCheck,
-    Pencil,
     ChevronLeft,
-    Loader2,
-    Trash2,
+    AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { fetchWithAuth } from "@/lib/auth";
-interface DietPlan {
-    id: string;
-    name: string;
-    createdAt: string;
-    status: string;
-    kcal: number;
-}
+import { PatientDietsTable, PatientDiet } from "@/components/diets/patient-diets-table";
 
 interface PatientHeaderData {
     name: string;
@@ -33,18 +21,49 @@ export default function PatientDietsPage() {
     const router = useRouter();
     const patientId = params.id as string;
 
-    const [diets, setDiets] = useState<DietPlan[]>([]);
+    // 1. Estado de Montaje Seguro para evitar el Hydration Mismatch
+    const [isMounted, setIsMounted] = useState(false);
+
+    const [diets, setDiets] = useState<PatientDiet[]>([]);
     const [patient, setPatient] = useState<PatientHeaderData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [totalItems, setTotalItems] = useState(0);
 
+    // Estados de Paginación y Filtros (Ahora incluye todos los campos)
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [filters, setFilters] = useState({
+        name: "",
+        createdAt: "",
+        kcal: "",
+        status: "",
+    });
+
+    const [debouncedFilters, setDebouncedFilters] = useState(filters);
+
+    // Guardamos el objeto entero para poder mostrar el nombre en el modal pero borrar por ID
+    const [dietToDelete, setDietToDelete] = useState<{ id: string; name: string } | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    // Efecto de Montaje Seguro
     useEffect(() => {
-        const fetchPatientAndDiets = async () => {
-            setIsLoading(true);
+        setIsMounted(true);
+    }, []);
+
+    // Efecto Debounce
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedFilters(filters);
+            setCurrentPage(1);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [filters]);
+
+    // Fetch Patient Data
+    useEffect(() => {
+        const fetchPatient = async () => {
             try {
                 const patientRes = await fetchWithAuth(`/api/patients/${patientId}`);
-
-                // 2. Recuperar el listado de dietas del paciente
-                const dietsRes = await fetchWithAuth(`/api/patients/${patientId}/diets`);
 
                 if (patientRes.ok) {
                     const pData = await patientRes.json();
@@ -55,49 +74,107 @@ export default function PatientDietsPage() {
                             patientId.split("-")[0],
                     });
                 }
+            } catch (error) {
+                console.error("Error al cargar datos del paciente:", error);
+            }
+        };
+
+        if (patientId) {
+            fetchPatient();
+        }
+    }, [patientId]);
+
+    // Fetch Diets Server-Side
+    useEffect(() => {
+        const fetchDiets = async () => {
+            setIsLoading(true);
+            try {
+                const queryParams = new URLSearchParams({
+                    page: currentPage.toString(),
+                    itemsPerPage: itemsPerPage.toString(),
+                });
+
+                // Añadimos TODOS los filtros al query string
+                if (debouncedFilters.name) queryParams.append("name", debouncedFilters.name);
+                if (debouncedFilters.createdAt) queryParams.append("createdAt", debouncedFilters.createdAt);
+                if (debouncedFilters.kcal) queryParams.append("kcal", debouncedFilters.kcal);
+                if (debouncedFilters.status) queryParams.append("status", debouncedFilters.status);
+
+                const dietsRes = await fetchWithAuth(`/api/patients/${patientId}/diets?${queryParams.toString()}`);
 
                 if (dietsRes.ok) {
                     const dData = await dietsRes.json();
-                    // API Platform devuelve los resultados en hydra:member (JSON-LD)
-                    setDiets(dData['hydra:member'] || dData.data || []);
+                    setDiets(dData.data || []);
+                    setTotalItems(dData.total || 0);
                 }
             } catch (error) {
-                console.error("Error al cargar el CRUD de dietas:", error);
+                console.error("Error cargando dietas:", error);
             } finally {
                 setIsLoading(false);
             }
         };
 
-        if (patientId) {
-            fetchPatientAndDiets();
+        if (patientId && isMounted) {
+            fetchDiets();
         }
-    }, [patientId]);
+    }, [patientId, currentPage, itemsPerPage, debouncedFilters, isMounted]);
 
-    const handleDeleteDiet = async (dietId: string) => {
-        const confirmDelete = window.confirm(
-            "¿Estás seguro de que deseas eliminar esta pauta? Esta acción no se puede deshacer de la vista.",
-        );
-        if (!confirmDelete) return;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+    const handleFilterChange = (col: string, val: string) => {
+        setFilters((prev) => ({ ...prev, [col]: val }));
+    };
+
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+    };
+
+    const handleDelete = async () => {
+        if (!dietToDelete) return;
+        setIsDeleting(true);
 
         try {
-            const res = await fetchWithAuth(`/api/diets/${dietId}`, {
+            const response = await fetchWithAuth(`/api/diets/${dietToDelete.id}`, {
                 method: "DELETE",
             });
 
-            if (res.ok) {
-                // Actualizamos el estado local para que desaparezca sin tener que recargar la página entera
-                setDiets((prevDiets) =>
-                    prevDiets.filter((diet) => diet.id !== dietId),
-                );
+            if (response.ok) {
+                setDietToDelete(null);
+                // Refrescar la lista incluyendo todos los filtros activos
+                const queryParams = new URLSearchParams({
+                    page: currentPage.toString(),
+                    itemsPerPage: itemsPerPage.toString(),
+                });
+                if (debouncedFilters.name) queryParams.append("name", debouncedFilters.name);
+                if (debouncedFilters.createdAt) queryParams.append("createdAt", debouncedFilters.createdAt);
+                if (debouncedFilters.kcal) queryParams.append("kcal", debouncedFilters.kcal);
+                if (debouncedFilters.status) queryParams.append("status", debouncedFilters.status);
+
+                const res = await fetchWithAuth(`/api/patients/${patientId}/diets?${queryParams.toString()}`);
+                if (res.ok) {
+                    const responseJson = await res.json();
+                    setDiets(responseJson.data || []);
+                    setTotalItems(responseJson.total || 0);
+                }
             } else {
-                const errorData = await res.json();
-                alert(`Error al eliminar: ${errorData.error}`);
+                const errorData = await response.json();
+                alert(errorData.error || "No se pudo eliminar la dieta.");
             }
         } catch (error) {
-            console.error("Error en la petición de borrado:", error);
-            alert("Error de red al intentar eliminar la pauta.");
+            alert("Error de red al eliminar.");
+        } finally {
+            setIsDeleting(false);
         }
     };
+
+    // Guardia de hidratación: Renderiza una pantalla de carga neutral en el servidor
+    if (!isMounted) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
+            </div>
+        );
+    }
 
     return (
         <main className="min-h-screen bg-slate-50 p-6 text-slate-900">
@@ -126,12 +203,11 @@ export default function PatientDietsPage() {
                         </p>
                     </div>
 
-                    {/* Botón de creación con redirección limpia al RAG pre-cargado */}
+                    {/* Botón de creación con booleano estricto */}
                     <button
                         onClick={() =>
                             router.push(`/dashboard/rag?patientId=${patientId}`)
                         }
-                        suppressHydrationWarning={true}
                         disabled={Boolean(isLoading)}
                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600/30 disabled:opacity-50"
                     >
@@ -140,119 +216,75 @@ export default function PatientDietsPage() {
                     </button>
                 </div>
 
-                {/* Tabla del CRUD */}
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm text-slate-600">
-                            <thead className="bg-slate-50/50 border-b border-slate-200">
-                                <tr>
-                                    <th className="p-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Plan Nutricional
-                                    </th>
-                                    <th className="p-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Fecha de Inferencia
-                                    </th>
-                                    <th className="p-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Ajuste Energético
-                                    </th>
-                                    <th className="p-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Estado
-                                    </th>
-                                    <th className="p-4 text-xs font-semibold uppercase tracking-wide text-slate-500 text-right">
-                                        Acciones
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {isLoading ? (
-                                    <tr>
-                                        <td
-                                            colSpan={5}
-                                            className="p-8 text-center text-slate-400"
-                                        >
-                                            <div className="flex items-center justify-center gap-2">
-                                                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                                                Recuperando registros
-                                                clínicos...
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : diets.length === 0 ? (
-                                    <tr>
-                                        <td
-                                            colSpan={5}
-                                            className="p-8 text-center text-slate-400 italic"
-                                        >
-                                            Este expediente no registra planes
-                                            dietéticos activos. Haz clic en
-                                            "Diseñar Nueva Dieta" para iniciar
-                                            el motor de IA.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    diets.map((diet) => (
-                                        <tr
-                                            key={diet.id}
-                                            className="transition-colors hover:bg-slate-50/50"
-                                        >
-                                            <td className="p-4 font-medium text-slate-800 flex items-center gap-2">
-                                                <FileSpreadsheet className="h-4 w-4 text-slate-400" />
-                                                {diet.name}
-                                            </td>
-                                            <td className="p-4 text-xs font-mono">
-                                                <span className="inline-flex items-center gap-1">
-                                                    <Calendar className="h-3 w-3 text-slate-400" />
-                                                    {diet.createdAt}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 font-semibold text-slate-900">
-                                                {diet.kcal} kcal
-                                            </td>
-                                            <td className="p-4">
-                                                <span
-                                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium border ${
-                                                        diet.status ===
-                                                        "Validado"
-                                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                                            : "bg-amber-50 text-amber-700 border-amber-200"
-                                                    }`}
-                                                >
-                                                    {diet.status ===
-                                                        "Validado" && (
-                                                        <ShieldCheck className="h-3 w-3" />
-                                                    )}
-                                                    {diet.status}
-                                                </span>
-                                            </td>
-                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-500 text-right">
-                                                <button
-                                                    onClick={() =>
-                                                        router.push(`/dashboard/diets/${diet.id}`)
-                                                    }
-                                                    className="inline-flex items-center justify-center p-2 text-slate-400 transition-colors hover:text-blue-600 hover:bg-blue-50 rounded-lg focus:outline-none"
-                                                    title="Editar pauta"
-                                                >
-                                                    <Pencil className="size-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() =>
-                                                        handleDeleteDiet(
-                                                            diet.id,
-                                                        )
-                                                    }
-                                                    className="inline-flex items-center justify-center p-2 text-slate-400 transition-colors hover:text-red-600 hover:bg-red-50 rounded-lg focus:outline-none"
-                                                    title="Eliminar pauta"
-                                                >
-                                                    <Trash2 className="size-4" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                {/* Controles Superiores */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div className="flex items-center space-x-3 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                        <span className="text-sm text-slate-500 font-medium pl-2">Mostrar</span>
+                        <select
+                            className="border-none text-sm focus:ring-0 cursor-pointer bg-slate-50 rounded p-1"
+                            value={itemsPerPage}
+                            onChange={(e) => {
+                                setItemsPerPage(Number(e.target.value));
+                                setCurrentPage(1);
+                            }}
+                        >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                        </select>
+                        <span className="text-sm text-slate-500 font-medium pr-2">registros</span>
                     </div>
                 </div>
+
+                {/* Tabla */}
+                <PatientDietsTable
+                    diets={diets}
+                    isLoading={isLoading}
+                    totalItems={totalItems}
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    itemsPerPage={itemsPerPage}
+                    onFilterChange={handleFilterChange}
+                    onPageChange={handlePageChange}
+                    onDelete={setDietToDelete}
+                />
+
+                {/* Modal de Confirmación */}
+                {dietToDelete && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+                        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+                            <div className="flex items-center gap-4 text-red-600 mb-4">
+                                <div className="p-3 bg-red-100 rounded-full">
+                                    <AlertTriangle className="h-6 w-6" />
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-900">
+                                    ¿Eliminar dieta?
+                                </h3>
+                            </div>
+                            <p className="text-slate-600 text-sm mb-6 leading-relaxed">
+                                Estás a punto de eliminar{" "}
+                                <strong className="text-slate-800">"{dietToDelete.name}"</strong>. 
+                                Esta acción no se puede deshacer.
+                            </p>
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => setDietToDelete(null)}
+                                    disabled={Boolean(isDeleting)}
+                                    className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleDelete}
+                                    disabled={Boolean(isDeleting)}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-sm focus:ring-2 focus:ring-red-500/20 disabled:opacity-50"
+                                >
+                                    {isDeleting ? "Eliminando..." : "Sí, eliminar"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </main>
     );
