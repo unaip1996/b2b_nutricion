@@ -14,7 +14,7 @@ export default function UsersListPage() {
 
   // Estados de Paginación y Filtros
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [filters, setFilters] = useState({
     email: "",
     role: "",

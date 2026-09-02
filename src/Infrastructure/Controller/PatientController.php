@@ -21,6 +21,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[OA\Tag(name: 'Pacientes', description: 'Endpoints para la gestión de expedientes clínicos y biometría')]
 readonly class PatientController
 {
+    const DEFAULT_ITEMS_PER_PAGE = 10;
+
     #[Route('/api/patients', name: 'api_patients_list', methods: ['GET'])]
     #[IsGranted('ROLE_USER')]
     #[OA\Get(summary: 'Obtiene el listado general de pacientes paginado y filtrado')]
@@ -34,7 +36,7 @@ readonly class PatientController
     {
         // 1. Leer parámetros de paginación y filtros de la URL
         $page = $request->query->getInt('page', 1);
-        $itemsPerPage = $request->query->getInt('itemsPerPage', 5);
+        $itemsPerPage = $request->query->getInt('itemsPerPage', self::DEFAULT_ITEMS_PER_PAGE);
         $filters = [
             'medicalId' => $request->query->get('medicalId'),
             'name' => $request->query->get('name'),

@@ -18,6 +18,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[OA\Tag(name: 'Base de Conocimiento (RAG)', description: 'Endpoints para la ingesta, indexación y gestión de documentos clínicos (PDFs)')]
 readonly class IngestionController
 {
+    const DEFAULT_ITEMS_PER_PAGE = 10;
+
     #[Route('/api/ingest', name: 'api_ingest_document', methods: ['POST'])]
     #[IsGranted('ROLE_USER')]
     #[OA\Post(summary: 'Sube, extrae texto (OCR/Nativo) y vectoriza un documento clínico (PDF)')]
@@ -117,7 +119,7 @@ readonly class IngestionController
         try {
             // Leer parámetros de paginación y filtros
             $page = $request->query->getInt('page', 1);
-            $itemsPerPage = $request->query->getInt('itemsPerPage', 5);
+            $itemsPerPage = $request->query->getInt('itemsPerPage', self::DEFAULT_ITEMS_PER_PAGE);
             $filters = [
                 'title' => $request->query->get('title'),
             ];
