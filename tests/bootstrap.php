@@ -32,8 +32,8 @@ $scriptContent = <<<PHP
 <?php
 require __DIR__.'/../vendor/autoload.php';
 use Symfony\Component\Dotenv\Dotenv;
-(new Dotenv())->bootEnv(dirname(__DIR__).'/.env');
 \$_SERVER['APP_ENV'] = 'test';
+(new Dotenv())->bootEnv(dirname(__DIR__).'/.env');
 \$kernel = new App\Kernel('test', true);
 \$kernel->boot();
 \$kernel->getContainer()->get('doctrine')->getConnection()->executeStatement('CREATE EXTENSION IF NOT EXISTS vector');

@@ -2,12 +2,16 @@
 
 declare(strict_types=1);
 
-namespace App\Tests;
+namespace App\Tests\Controller;
 
 use App\Application\UseCase\GenerateClinicalDietUseCase;
 use App\Infrastructure\Entity\Patient;
 use App\Infrastructure\Entity\DietaryPlan;
 use Symfony\Component\HttpFoundation\Response;
+use App\Infrastructure\Controller\DietController;
+use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpFoundation\Request;
 
 class DietControllerTest extends AuthenticatedApiTestCase
 {
@@ -15,7 +19,6 @@ class DietControllerTest extends AuthenticatedApiTestCase
     {
         $client = $this->createAuthenticatedClient('admin-diet@test.com', 'password', ['ROLE_ADMIN']);
 
-        // 1. Preparar datos en base de datos para simular
         $patient = new Patient();
         $patient->setName('Paciente Dieta Test');
         $patient->setMedicalHistoryNumber('PAC-888');
@@ -35,15 +38,12 @@ class DietControllerTest extends AuthenticatedApiTestCase
         $patientId = (string) $patient->getId();
         $dietId = (string) $diet->getId();
 
-        // 2. Listar dietas del paciente
         $client->request('GET', '/api/patients/' . $patientId . '/diets');
         $this->assertResponseIsSuccessful();
 
-        // 3. Obtener detalle de dieta
         $client->request('GET', '/api/diets/' . $dietId);
         $this->assertResponseIsSuccessful();
 
-        // 4. Actualizar dieta masivamente (Cubre más de 60 líneas de bucles)
         $updatePayload = [
             'name' => 'Dieta Modificada',
             'kcal' => 2200,
@@ -68,7 +68,6 @@ class DietControllerTest extends AuthenticatedApiTestCase
         $client->request('PUT', '/api/diets/' . $dietId, [], [], ['CONTENT_TYPE' => 'application/json'], json_encode($updatePayload));
         $this->assertResponseIsSuccessful();
 
-        // 5. Soft Delete
         $client->request('DELETE', '/api/diets/' . $dietId);
         $this->assertResponseIsSuccessful();
     }
@@ -77,7 +76,6 @@ class DietControllerTest extends AuthenticatedApiTestCase
     {
         $client = $this->createAuthenticatedClient('admin-gen@test.com', 'password', ['ROLE_USER']);
 
-        // Intentar generar dieta sin parámetros (Fuerza las validaciones de error)
         $client->request('POST', '/api/diets/generate', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode([]));
         $this->assertResponseStatusCodeSame(400);
     }
@@ -101,27 +99,24 @@ class DietControllerTest extends AuthenticatedApiTestCase
     {
         $client = $this->createAuthenticatedClient('admin@test.com', 'password', ['ROLE_ADMIN']);
 
-        // 1. Creamos el Paciente rellenando ESTRICTAMENTE los 4 campos obligatorios de tu Entidad
         $patient = new \App\Infrastructure\Entity\Patient();
         $patient->setName('Paciente de Prueba');
-        $patient->setMedicalHistoryNumber('MHN-' . uniqid()); // Usamos uniqid() para que no choque si corres el test varias veces
+        $patient->setMedicalHistoryNumber('MHN-' . uniqid()); 
         $patient->setGender('Otro');
         $patient->setBirthDate(new \DateTimeImmutable('1990-01-01'));
         
         $this->em->persist($patient);
         $this->em->flush();
 
-        // Extraemos el UUID real generado en BD
         $patientId = (string) $patient->getId();
 
-        // 2. Hacemos la petición con el UUID real
         $client->request(
             'POST',
             '/api/diets/generate', 
             [],
             [],
             ['CONTENT_TYPE' => 'application/json'],
-            json_encode(['patientId' => $patientId, 'query' => 'Quiero ganar músculo']) 
+            json_encode(['patientId' => $patientId, 'query' => 'Quiero ganar mÃºsculo']) 
         );
 
         $this->assertResponseIsSuccessful();
@@ -162,7 +157,34 @@ class DietControllerTest extends AuthenticatedApiTestCase
         $malformedJson = '{"name": "test",}';
 
         $client->request('PUT', '/api/diets/' . $dietId, [], [], ['CONTENT_TYPE' => 'application/json'], $malformedJson);
-        // Basado en otros controladores, una JsonException en un payload de actualización resulta en un 500.
         $this->assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
     }
+
+    public function testDietControllerExceptionsAndSuccess(): void
+    {
+        $useCase = $this->createStub(GenerateClinicalDietUseCase::class);
+        $logger = $this->createStub(LoggerInterface::class);
+        $controller = new DietController();
+        
+        $reqGenerate = new Request([], [], [], [], [], [], json_encode(['patientId'=>'1','query'=>'t']));
+        $this->assertEquals(200, $controller->generateDiet($reqGenerate, $useCase)->getStatusCode());
+
+        $useCaseThrow = $this->createStub(GenerateClinicalDietUseCase::class);
+        $useCaseThrow->method('execute')->willThrowException(new \Exception('Test'));
+        $this->assertEquals(500, $controller->generateDiet($reqGenerate, $useCaseThrow)->getStatusCode());
+        
+        $em = $this->createStub(EntityManagerInterface::class);
+        $dietRepo = $this->createStub(\App\Infrastructure\Repository\DietaryPlanRepository::class);
+        $dietRepo->method('searchAndPaginateByPatient')->willThrowException(new \Exception('Test'));
+        $req = new Request();
+        $this->assertEquals(500, $controller->listPatientDiets('1', $req, $dietRepo)->getStatusCode());
+        
+        $em->method('getRepository')->willThrowException(new \Exception('Test'));
+        $this->assertEquals(500, $controller->getDietDetail('1', $em, $logger)->getStatusCode());
+        $this->assertEquals(500, $controller->deleteDiet('1', $em)->getStatusCode());
+        
+        $reqPut = new Request([], [], [], [], [], [], '{}');
+        $this->assertEquals(500, $controller->updateDiet('1', $reqPut, $em, $logger)->getStatusCode());
+    }
 }
+

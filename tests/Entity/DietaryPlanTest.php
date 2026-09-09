@@ -1,8 +1,7 @@
 <?php
-
 declare(strict_types=1);
 
-namespace App\Tests;
+namespace App\Tests\Entity;
 
 use App\Infrastructure\Entity\DietaryPlan;
 use App\Infrastructure\Entity\DietDay;
@@ -20,7 +19,6 @@ class DietaryPlanTest extends TestCase
         $endDate = new \DateTimeImmutable('2026-08-07');
         $deletedAt = new \DateTimeImmutable('2026-08-10');
 
-        // Probamos todos los setters de la entidad
         $plan->setPatient($patient);
         $plan->setName('Plan de Prueba');
         $plan->setKcal(2500);
@@ -29,7 +27,6 @@ class DietaryPlanTest extends TestCase
         $plan->setEndDate($endDate);
         $plan->setDeletedAt($deletedAt);
 
-        // Verificamos con los getters
         $this->assertSame($patient, $plan->getPatient());
         $this->assertSame('Plan de Prueba', $plan->getName());
         $this->assertSame(2500, $plan->getKcal());
@@ -46,14 +43,12 @@ class DietaryPlanTest extends TestCase
         $chunk = new DocumentChunk();
         $dietDay = new DietDay();
 
-        // Probar ArrayCollection de DocumentChunks
         $plan->addDocumentChunk($chunk);
         $this->assertTrue($plan->getDocumentChunks()->contains($chunk));
         
         $plan->removeDocumentChunk($chunk);
         $this->assertFalse($plan->getDocumentChunks()->contains($chunk));
 
-        // Probar ArrayCollection de DietDays
         $plan->addDietDay($dietDay);
         $this->assertTrue($plan->getDietDays()->contains($dietDay));
         $this->assertSame($plan, $dietDay->getDietaryPlan());
@@ -66,14 +61,12 @@ class DietaryPlanTest extends TestCase
     {
         $dietPlan = new DietaryPlan();
         
-        // Creamos los fragmentos vectoriales simulados
         $chunk1 = new DocumentChunk();
         $chunk1->setContent('Directriz OMS sobre ingesta proteica.');
         
         $chunk2 = new DocumentChunk();
         $chunk2->setContent('Estudio de superávit calórico.');
 
-        // Vinculamos la dieta con el conocimiento (ManyToMany)
         $dietPlan->addDocumentChunk($chunk1);
         $dietPlan->addDocumentChunk($chunk2);
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Tests;
+namespace App\Tests\Controller;
 
 use App\Infrastructure\Entity\Patient;
 use App\Infrastructure\Entity\User;
@@ -200,5 +200,39 @@ class PatientControllerTest extends AuthenticatedApiTestCase
         
         // Tu PatientController emite un 500 genérico para este error
         $this->assertResponseStatusCodeSame(Response::HTTP_INTERNAL_SERVER_ERROR);
+    }
+
+    public function testPatientUpdateFailsOnInvalidJson(): void
+    {
+        $repo = $this->createStub(\App\Infrastructure\Repository\PatientRepository::class);
+        $controller = new \App\Infrastructure\Controller\PatientController();
+        $em = $this->createStub(\Doctrine\ORM\EntityManagerInterface::class);
+        $repo->method('find')->willReturn(new \App\Infrastructure\Entity\Patient());
+
+        $reqUpdate = new \Symfony\Component\HttpFoundation\Request([], [], [], [], [], [], 'invalid');
+        $this->assertEquals(500, $controller->update('1', $reqUpdate, $em, $repo)->getStatusCode());
+    }
+
+    public function testPatientCreateFailsOnPersist(): void
+    {
+        $token = $this->createStub(\Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface::class);
+        $controller = new \App\Infrastructure\Controller\PatientController();
+        $em = $this->createStub(\Doctrine\ORM\EntityManagerInterface::class);
+        
+        $reqCreateValid = new \Symfony\Component\HttpFoundation\Request([], [], [], [], [], [], '{}');
+        $em->method('persist')->willThrowException(new \Exception('Test'));
+        $this->assertEquals(500, $controller->create($reqCreateValid, $em, $token)->getStatusCode());
+    }
+
+    public function testPatientDeleteFailsOnFlush(): void
+    {
+        $controller = new \App\Infrastructure\Controller\PatientController();
+        $em = $this->createStub(\Doctrine\ORM\EntityManagerInterface::class);
+        $patientRepo = $this->createStub(\App\Infrastructure\Repository\PatientRepository::class);
+
+        $em->method('flush')->willThrowException(new \Exception('Test'));
+        $patientRepo->method('find')->willReturn(new \App\Infrastructure\Entity\Patient());
+
+        $this->assertEquals(500, $controller->delete('1', $em, $patientRepo)->getStatusCode());
     }
 }

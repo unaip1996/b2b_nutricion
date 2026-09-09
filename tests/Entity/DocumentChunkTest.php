@@ -1,8 +1,7 @@
 <?php
-
 declare(strict_types=1);
 
-namespace App\Tests;
+namespace App\Tests\Entity;
 
 use App\Infrastructure\Entity\DocumentChunk;
 use App\Infrastructure\Entity\DietaryPlan;
@@ -17,14 +16,12 @@ class DocumentChunkTest extends TestCase
         $document = $this->createStub(ClinicalDocument::class);
         $deletedAt = new \DateTimeImmutable('2026-08-10');
         
-        // Probamos todos los setters
         $chunk->setContent('Contenido médico sobre hipertrofia.');
-        $chunk->setEmbedding('[0.1, 0.2, 0.3]'); // En BD es vector, en PHP lo tratas como string
+        $chunk->setEmbedding('[0.1, 0.2, 0.3]'); 
         $chunk->setMetadata(['page' => 1, 'source' => 'pdf']);
         $chunk->setDeletedAt($deletedAt);
         $chunk->setClinicalDocument($document);
 
-        // Verificamos con getters
         $this->assertSame('Contenido médico sobre hipertrofia.', $chunk->getContent());
         $this->assertSame('[0.1, 0.2, 0.3]', $chunk->getEmbedding());
         $this->assertSame(['page' => 1, 'source' => 'pdf'], $chunk->getMetadata());
@@ -38,11 +35,18 @@ class DocumentChunkTest extends TestCase
         $chunk = new DocumentChunk();
         $plan = new DietaryPlan();
 
-        // Probar añadir y quitar planes dietéticos
         $chunk->addDietaryPlan($plan);
         $this->assertTrue($chunk->getDietaryPlans()->contains($plan));
 
         $chunk->removeDietaryPlan($plan);
         $this->assertFalse($chunk->getDietaryPlans()->contains($plan));
+    }
+
+    public function testDocumentChunkRemaining(): void
+    {
+        $chunk = new DocumentChunk();
+        $date = new \DateTimeImmutable();
+        $chunk->setDeletedAt($date);
+        $this->assertSame($date, $chunk->getDeletedAt());
     }
 }

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Tests;
+namespace App\Tests\Controller;
 
 use App\Infrastructure\Entity\User;
 use Symfony\Component\HttpFoundation\Response;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Tests;
+namespace App\Tests\UseCase;
 
 use App\Application\UseCase\IngestClinicalDocumentUseCase;
 use App\Domain\Service\EmbeddingGeneratorInterface;

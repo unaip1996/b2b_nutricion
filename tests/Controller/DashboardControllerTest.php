@@ -1,10 +1,12 @@
 <?php
 declare(strict_types=1);
 
-namespace App\Tests;
+namespace App\Tests\Controller;
 
 use App\Infrastructure\Entity\DietaryPlan;
 use App\Infrastructure\Entity\Patient;
+use App\Infrastructure\Controller\DashboardController;
+use Doctrine\ORM\EntityManagerInterface;
 
 class DashboardControllerTest extends AuthenticatedApiTestCase
 {
@@ -65,5 +67,13 @@ class DashboardControllerTest extends AuthenticatedApiTestCase
 
         $client->request('GET', '/api/dashboard/stats');
         $this->assertResponseIsSuccessful();
+    }
+
+    public function testDashboardException(): void
+    {
+        $em = $this->createStub(EntityManagerInterface::class);
+        $em->method('getRepository')->willThrowException(new \Exception('Test'));
+        $controller = new DashboardController();
+        $this->assertEquals(500, $controller->getStats($em)->getStatusCode());
     }
 }

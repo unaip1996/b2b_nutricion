@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Tests;
+namespace App\Tests\UseCase;
 
 use App\Application\UseCase\GenerateClinicalDietUseCase;
 use App\Domain\Service\EmbeddingGeneratorInterface;
@@ -193,5 +193,38 @@ class GenerateClinicalDietUseCaseTest extends TestCase
         $this->entityManager->expects($this->once())->method('flush');
 
         $this->useCase->execute('1', 'q', 2000, new \DateTimeImmutable(), new \DateTimeImmutable());
+    }
+
+    public function testGenerateDietUseCaseNotFound(): void
+    {
+        $patientRepo = $this->createStub(\App\Infrastructure\Repository\PatientRepository::class);
+        $chunkRepo = $this->createStub(\App\Infrastructure\Repository\DocumentChunkRepository::class);
+        $embed = $this->createStub(\App\Domain\Service\EmbeddingGeneratorInterface::class);
+        $llm = $this->createStub(\App\Domain\Service\LlmInferenceInterface::class);
+        $em = $this->createStub(\Doctrine\ORM\EntityManagerInterface::class);
+
+        $useCase = new \App\Application\UseCase\GenerateClinicalDietUseCase($patientRepo, $chunkRepo, $embed, $llm, $em);
+        $patientRepo->method('find')->willReturn(null);
+        
+        $this->expectException(\InvalidArgumentException::class);
+        $useCase->execute('1', 'q', 2000, new \DateTimeImmutable(), new \DateTimeImmutable());
+    }
+
+    public function testGenerateDietUseCaseInvalidJson(): void
+    {
+        $patientRepo = $this->createStub(\App\Infrastructure\Repository\PatientRepository::class);
+        $chunkRepo = $this->createStub(\App\Infrastructure\Repository\DocumentChunkRepository::class);
+        $embed = $this->createStub(\App\Domain\Service\EmbeddingGeneratorInterface::class);
+        $llm = $this->createStub(\App\Domain\Service\LlmInferenceInterface::class);
+        $em = $this->createStub(\Doctrine\ORM\EntityManagerInterface::class);
+
+        $useCase = new \App\Application\UseCase\GenerateClinicalDietUseCase($patientRepo, $chunkRepo, $embed, $llm, $em);
+        
+        $patient = new \App\Infrastructure\Entity\Patient();
+        $patientRepo->method('find')->willReturn($patient);
+        $llm->method('generateText')->willReturn('INVALID JSON');
+        
+        $this->expectException(\RuntimeException::class);
+        $useCase->execute('1', 'q', 2000, new \DateTimeImmutable(), new \DateTimeImmutable());
     }
 }

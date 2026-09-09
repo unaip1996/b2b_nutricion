@@ -21,12 +21,12 @@ classDiagram
         +authenticate(Request request) Passport
     }
 
-    class NutricionistaProfile {
+    class NutritionistProfile {
         <<Domain>>
         - String colegiadoNumber
         - String clinicName
     }
 
-    User "1" -- "1" NutricionistaProfile : has_profile
+    User "1" -- "1" NutritionistProfile : has_profile
     AuthProvider ..> User : manages
     SecurityAuthenticator ..> User : validates

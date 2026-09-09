@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace App\Tests;
+namespace App\Tests\Controller;
 
 use App\Application\UseCase\IngestClinicalDocumentUseCase;
 use App\Infrastructure\Entity\ClinicalDocument;
@@ -73,5 +73,49 @@ PDF;
         $corruptFile = new UploadedFile(tempnam(sys_get_temp_dir(), 'tst_err'), 'corrupt.pdf', 'application/pdf', \UPLOAD_ERR_CANT_WRITE, true);
         $client->request('POST', '/api/ingest', [], ['file' => $corruptFile]);
         $this->assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
+    }
+
+    public function testIngestionControllerLogic(): void
+    {
+        $chunkRepo = $this->createStub(\App\Infrastructure\Repository\DocumentChunkRepository::class);
+        $useCase = $this->createStub(\App\Application\UseCase\IngestClinicalDocumentUseCase::class);
+        $docRepo = $this->createStub(\App\Infrastructure\Repository\ClinicalDocumentRepository::class);
+        $controller = new \App\Infrastructure\Controller\IngestionController();
+
+        $doc = new \App\Infrastructure\Entity\ClinicalDocument();
+        $doc->setFileName('test.pdf');
+        $reflection = new \ReflectionClass($doc);
+        
+        $propId = $reflection->getProperty('id');
+        $propId->setValue($doc, \Symfony\Component\Uid\Uuid::fromString('00000000-0000-0000-0000-000000000000'));
+        
+        $propDate = $reflection->getProperty('ingestedAt');
+        $propDate->setValue($doc, new \DateTimeImmutable());
+        
+        $docRepo->method('searchAndPaginateActive')->willReturn(['items' => [$doc], 'total' => 1]);
+        $req = new \Symfony\Component\HttpFoundation\Request();
+        $this->assertEquals(200, $controller->listDocuments($req, $docRepo)->getStatusCode());
+
+        $docRepoEx = $this->createStub(\App\Infrastructure\Repository\ClinicalDocumentRepository::class);
+        $docRepoEx->method('searchAndPaginateActive')->willThrowException(new \Exception('Test'));
+        $this->assertEquals(500, $controller->listDocuments($req, $docRepoEx)->getStatusCode());
+
+        $em = $this->createStub(\Doctrine\ORM\EntityManagerInterface::class);
+        $repo = $this->createStub(\Doctrine\ORM\EntityRepository::class);
+        $repo->method('find')->willReturn(null);
+        $em->method('getRepository')->willReturn($repo);
+        $this->assertEquals(404, $controller->deleteDocument('1', $em)->getStatusCode());
+
+        $emEx = $this->createStub(\Doctrine\ORM\EntityManagerInterface::class);
+        $emEx->method('getRepository')->willThrowException(new \Exception('Test'));
+        $this->assertEquals(500, $controller->deleteDocument('1', $emEx)->getStatusCode());
+
+        $useCase->method('execute')->willThrowException(new \Exception('Test'));
+        $file = $this->createStub(\Symfony\Component\HttpFoundation\File\UploadedFile::class);
+        $file->method('isValid')->willReturn(true);
+        $file->method('getMimeType')->willReturn('application/pdf');
+        $req = new \Symfony\Component\HttpFoundation\Request();
+        $req->files->set('file', $file);
+        $this->assertEquals(500, $controller->upload($req, $useCase)->getStatusCode());
     }
 }
