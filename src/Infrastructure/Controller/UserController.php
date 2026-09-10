@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Infrastructure\Controller;
 
 use App\Infrastructure\Entity\User;
-use App\Repository\UserRepository;
+use App\Infrastructure\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use OpenApi\Attributes as OA;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;

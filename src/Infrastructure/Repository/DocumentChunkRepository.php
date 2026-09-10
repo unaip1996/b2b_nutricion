@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Repository;
 
-use App\Domain\Repository\DocumentChunkRepositoryInterface;
 use App\Infrastructure\Entity\DocumentChunk;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -13,7 +12,7 @@ use Doctrine\DBAL\ParameterType;
 /**
  * @extends ServiceEntityRepository<DocumentChunk>
  */
-class DocumentChunkRepository extends ServiceEntityRepository implements DocumentChunkRepositoryInterface
+class DocumentChunkRepository extends ServiceEntityRepository
 {
     public function __construct(ManagerRegistry $registry)
     {

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Repository;
 
 use App\Infrastructure\Entity\User;
-use App\Repository\UserRepository;
+use App\Infrastructure\Repository\UserRepository;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 class UserRepositoryTest extends KernelTestCase

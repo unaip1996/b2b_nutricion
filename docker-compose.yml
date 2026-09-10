@@ -1,15 +1,20 @@
 services:
   database:
-    image: pgvector/pgvector:pg16 
+    image: pgvector/pgvector:pg16
     container_name: nutri_db
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: app
-      POSTGRES_PASSWORD: root
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
     ports:
       - "5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   php:
     build: 
@@ -17,11 +22,12 @@ services:
       dockerfile: Dockerfile
     container_name: nutri_php
     ports:
-      - "8000:8000" # <-- ABRIMOS EL PUERTO AL EXTERIOR
+      - "8000:8000"
     volumes:
       - .:/app
     depends_on:
-      - database
+      database:
+        condition: service_healthy
     command: php -S 0.0.0.0:8000 -t public/
 
 
@@ -30,13 +36,13 @@ services:
     container_name: nutri_frontend
     working_dir: /app
     ports:
-      - "80:3000"
+      - "3000:3000"
     volumes:
       - ./frontend:/app
     environment:
       # Conecta el frontend con tu backend en producción
-      - NEXT_PUBLIC_API_URL=http://2.28.76.81:8000
-    command: sh -c "npm install && npm run build && npm start"
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    command: sh -c "npm ci && npm run build && npm start"
     depends_on:
       - php
 
