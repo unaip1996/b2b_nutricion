@@ -1,32 +1,46 @@
+%%{init: {"themeVariables": {"fontSize": "12px"}, "flowchart": {"nodeSpacing": 25, "rankSpacing": 28, "useMaxWidth": false}}}%%
 classDiagram
+    %% Disenado para impresion A4 vertical.
+    direction TB
+
     class User {
-        <<Infrastructure - Security>>
-        - UUID id
-        - String email
-        - String password
-        - Array roles
-        - DateTime lastLogin
-        + getRoles() Array
-        + eraseCredentials() void
+        <<Doctrine Entity / Symfony Security User>>
+        -Uuid id
+        -string email
+        -array roles
+        -string password
+        -DateTimeImmutable lastLogin
+        +getUserIdentifier() string
+        +getRoles() array
     }
-
-    class AuthProvider {
-        <<Service>>
-        +login(Credentials creds) Token
-        +logout() void
-    }
-
-    class SecurityAuthenticator {
-        <<Infrastructure>>
-        +authenticate(Request request) Passport
-    }
-
     class NutritionistProfile {
-        <<Domain>>
-        - String colegiadoNumber
-        - String clinicName
+        <<Doctrine Entity>>
+        -Uuid id
     }
-
-    User "1" -- "1" NutritionistProfile : has_profile
-    AuthProvider ..> User : manages
-    SecurityAuthenticator ..> User : validates
+    class DoctrineEntityUserProvider {
+        <<Doctrine user provider>>
+        +loadUserByIdentifier() User
+    }
+    class JsonLoginAuthenticator {
+        <<Symfony json_login firewall>>
+        +authenticate() Passport
+    }
+    class JwtTokenIssuer {
+        <<Lexik JWT success handler>>
+        +createToken() string
+    }
+    class JwtAuthenticator {
+        <<Lexik JWT firewall>>
+        +authenticate() Passport
+    }
+    class ApiController {
+        <<Protected API>>
+        +requires ROLE_USER
+    }
+    User "1" *-- "0..1" NutritionistProfile : nutritionist profile
+    DoctrineEntityUserProvider --> User : loads by email
+    JsonLoginAuthenticator --> DoctrineEntityUserProvider : validates credentials
+    JsonLoginAuthenticator --> JwtTokenIssuer : successful login
+    JwtTokenIssuer --> User : token subject
+    User --> JwtAuthenticator : JWT subject
+    JwtAuthenticator --> ApiController : grants ROLE_USER access

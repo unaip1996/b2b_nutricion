@@ -1,20 +1,36 @@
-graph LR
-    %% Estilos
-    classDef client fill:#3178c6,stroke:#fff,stroke-width:2px,color:#fff;
-    classDef router fill:#f39c12,stroke:#fff,stroke-width:2px,color:#fff;
-    classDef middleware fill:#8e24aa,stroke:#fff,stroke-width:2px,color:#fff;
-    classDef endpoint fill:#336699,stroke:#fff,stroke-width:2px,color:#fff;
-    classDef swagger fill:#10a37f,stroke:#fff,stroke-width:2px,color:#fff;
+%%{init: {"themeVariables": {"fontSize": "11px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 35, "useMaxWidth": false}}}%%
+flowchart LR
+    %% Disenado para impresion A4 apaisada.
+    classDef client fill:#3178c6,stroke:#fff,stroke-width:2px,color:#fff
+    classDef router fill:#f39c12,stroke:#fff,stroke-width:2px,color:#fff
+    classDef security fill:#8e24aa,stroke:#fff,stroke-width:2px,color:#fff
+    classDef endpoint fill:#336699,stroke:#fff,stroke-width:2px,color:#fff
+    classDef public fill:#10a37f,stroke:#fff,stroke-width:2px,color:#fff
 
-    Cliente["SPA (Next.js)"]:::client -->|Petición HTTP| Router{"Enrutador API<br/>(Symfony)"}:::router
-    
-    %% Ruta pública/documentación
-    Router -.->|GET /api/docs| Swagger["Interfaz Swagger UI<br/>(OpenAPI)"]:::swagger
-    
-    %% Flujo seguro
-    Router -->|Rutas /api/*| Auth["Middleware de Seguridad<br/>(Validación JWT)"]:::middleware
-    
-    %% Controladores
-    Auth -->|POST /api/patients| C1["PatientController<br/>(Gestión de Expedientes)"]:::endpoint
-    Auth -->|POST /api/ingest| C2["IngestionController<br/>(Procesamiento de PDFs)"]:::endpoint
-    Auth -->|POST /api/diets/generate| C3["DietController<br/>(Orquestación RAG)"]:::endpoint
+    Cliente["Cliente web<br/>Next.js"]:::client
+    Router{"Router API<br/>Symfony"}:::router
+    Cliente -->|HTTP| Router
+
+    Swagger["GET /api/doc<br/>Swagger UI"]:::public
+    Login["POST /api/login_check<br/>Inicio de sesion y JWT"]:::public
+    Router -.-> Swagger
+    Router -.-> Login
+
+    Auth["Firewall JWT<br/>Rutas /api protegidas"]:::security
+    Router --> Auth
+
+    subgraph Protegida["API protegida"]
+        direction TB
+        Pacientes["Pacientes<br/>GET, POST /api/patients<br/>GET, PUT, DELETE /api/patients/{id}"]:::endpoint
+        Dietas["Dietas<br/>POST /api/diets/generate<br/>GET /api/patients/{patientId}/diets<br/>GET, PUT, DELETE /api/diets/{id}"]:::endpoint
+        Conocimiento["Base de conocimiento<br/>POST /api/ingest<br/>GET, DELETE /api/knowledge-base"]:::endpoint
+        Usuarios["Usuarios y perfil<br/>GET, POST /api/users<br/>GET, PUT, DELETE /api/users/{id}<br/>GET, PUT /api/profile"]:::endpoint
+        Dashboard["Panel<br/>GET /api/dashboard/stats"]:::endpoint
+
+        Pacientes ~~~ Dietas
+        Dietas ~~~ Conocimiento
+        Conocimiento ~~~ Usuarios
+        Usuarios ~~~ Dashboard
+    end
+
+    Auth --> Pacientes

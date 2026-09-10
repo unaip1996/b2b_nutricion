@@ -1,49 +1,91 @@
+%%{init: {"themeVariables": {"fontSize": "12px"}, "flowchart": {"nodeSpacing": 20, "rankSpacing": 30, "useMaxWidth": false}}}%%
 classDiagram
+    %% Disenado para impresion A4 vertical.
+    direction TB
+
     class Patient {
-        <<Aggregate Root>>
-        - UUID id
-        - String name
-        - BiometricProfile biometricProfile
-        - ClinicalHistory clinicalHistory
-        + registerAllergy(Allergy allergy)
-        + updateBiometrics(float weight, float height)
-        + getValidatedContext() JSON
+        <<Doctrine Entity>>
+        -Uuid id
+        -string name
+        -string medicalHistoryNumber
+        -DateTimeImmutable birthDate
+        -string pathologies
+        -string nutritionalGoal
+        -bool activeStatus
     }
 
-    class BiometricProfile {
-        <<Value Object>>
-        - float weight
-        - float height
-        - int age
-        - String gender
-        + calculateIMC() float
-        + calculateBasalMetabolism() float
+    class Measurement {
+        <<Doctrine Entity>>
+        -Uuid id
+        -float weight
+        -float height
+        -float bodyFatPercentage
+        -DateTimeImmutable takenAt
     }
-
-    class ClinicalHistory {
-        <<Entity>>
-        - List~Pathology~ conditions
-        - List~Allergy~ allergies
-        + hasRestriction(String substance) bool
-    }
-
     class Allergy {
-        <<Value Object>>
-        - String name
-        - String severity
+        <<Doctrine Entity>>
+        -Uuid id
+        -string name
     }
-
     class DietaryPlan {
-        <<Entity>>
-        - UUID id
-        - UUID patientId
-        - String content
-        - DateTime createdAt
-        - List~Source~ references
-        + validate() bool
+        <<Doctrine Entity>>
+        -Uuid id
+        -string name
+        -DateTimeImmutable startDate
+        -DateTimeImmutable endDate
+        -int kcal
+        -string observations
+    }
+    class DietDay {
+        <<Doctrine Entity>>
+        -Uuid id
+        -int dayNumber
+    }
+    class Meal {
+        <<Doctrine Entity>>
+        -Uuid id
+        -string name
+        -DateTimeImmutable mealTime
+    }
+    class MealItem {
+        <<Doctrine Entity>>
+        -Uuid id
+        -float quantity
+        -string unit
+    }
+    class FoodItem {
+        <<Doctrine Entity>>
+        -Uuid id
+        -string name
+        -float kcalPer100g
+        -array macros
+        -string category
+    }
+    class ClinicalDocument {
+        <<Doctrine Entity>>
+        -Uuid id
+        -string fileName
+        -DateTimeImmutable ingestedAt
+    }
+    class DocumentChunk {
+        <<Doctrine Entity>>
+        -Uuid id
+        -string content
+        -string embedding
+        -array metadata
+    }
+    class NutritionistProfile {
+        <<Doctrine Entity>>
+        -Uuid id
     }
 
-    Patient "1" *-- "1" BiometricProfile : composition
-    Patient "1" *-- "1" ClinicalHistory : composition
-    ClinicalHistory "1" *-- "n" Allergy : contains
-    DietaryPlan "n" --> "1" Patient : generated for
+    Patient "1" --> "0..*" Measurement : measurements
+    Patient "0..*" --> "0..1" NutritionistProfile : assigned to
+    Patient "0..*" -- "0..*" Allergy : allergies
+    Patient "1" --> "0..*" DietaryPlan : dietary plans
+    DietaryPlan "1" *-- "0..*" DietDay : diet days
+    DietDay "1" *-- "0..*" Meal : meals
+    Meal "1" *-- "0..*" MealItem : items
+    MealItem "0..*" --> "1" FoodItem : food
+    ClinicalDocument "1" *-- "0..*" DocumentChunk : chunks
+    DietaryPlan "0..*" -- "0..*" DocumentChunk : RAG sources
