@@ -19,5 +19,7 @@ jobs:
             cd ~/b2b_nutricion
             git fetch origin
             git reset --hard origin/main
+            docker compose stop nutri_frontend
+            docker compose rm -f nutri_frontend
             docker compose up -d --build
             docker exec nutri_php php bin/console cache:clear --env=prod
