@@ -112,7 +112,7 @@ export default function KnowledgeBasePage() {
         alert(errorData.error || "No se pudo eliminar el documento.");
       }
     } catch (error) {
-      alert("Error de red al eliminar.");
+      alert(`Error de red al eliminar. ${error}`);
     } finally {
       setIsDeleting(false);
     }
@@ -171,7 +171,7 @@ export default function KnowledgeBasePage() {
               </div>
               <p className="text-slate-600 text-sm mb-6 leading-relaxed">
                 Estás a punto de eliminar{" "}
-                <strong className="text-slate-800">"{documentToDelete.title}"</strong>. 
+                <strong className="text-slate-800">&quot;{documentToDelete.title}&quot;</strong>. 
                 Esto purgará todos sus fragmentos vectoriales de PostgreSQL y la IA dejará de 
                 tener acceso a esta literatura para generar dietas. Esta acción no se puede deshacer.
               </p>

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 import React, { type ReactNode } from "react"
 
 interface FormFieldProps {

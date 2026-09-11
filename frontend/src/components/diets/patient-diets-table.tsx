@@ -50,6 +50,7 @@ export function PatientDietsTable({
 
   // 2. Efecto para confirmar que estamos en el navegador (cliente)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMounted(true);
   }, []);
 
@@ -141,7 +142,7 @@ export function PatientDietsTable({
             ) : diets.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center text-slate-500 italic">
-                  Este expediente no registra planes dietéticos activos. Haz clic en "Diseñar Nueva Dieta" para iniciar el motor de IA.
+                  Este expediente no registra planes dietéticos activos. Haz clic en &quot;Diseñar Nueva Dieta&quot; para iniciar el motor de IA.
                 </td>
               </tr>
             ) : (

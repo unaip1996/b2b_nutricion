@@ -1,14 +1,26 @@
-# Reglas Globales: Arquitectura Hexagonal y DDD
+# Arquitectura global
 
-El proyecto "B2B Nutrición" sigue estrictamente la Arquitectura Hexagonal (Puertos y Adaptadores) y Diseño Guiado por el Dominio (DDD).
+B2B Nutrición está compuesto por una API Symfony, un cliente Next.js y PostgreSQL con pgvector. La aplicación aplica una separación por capas y puertos para las integraciones externas.
 
-## 1. Capas del Proyecto
-- **Domain (`src/Domain/`):** El corazón. Entidades puras, Value Objects, y Puertos (Interfaces). PROHIBIDO usar librerías externas o frameworks aquí (ni Doctrine, ni Symfony, ni OpenAI).
-- **Application (`src/Application/`):** Casos de Uso (Use Cases). Orquestan el flujo. Llaman a los repositorios (puertos) y al dominio, pero no saben de HTTP ni de bases de datos.
-- **Infrastructure (`src/Infrastructure/`):** Adaptadores. Aquí vive Doctrine (Entidades de DB, Repositorios), Controladores API, conexión a OpenAI, y pgvector.
+## Capas del backend
 
-## 2. Estándares PHP 8.4
-- `declare(strict_types=1);` es OBLIGATORIO en el 100% de los archivos.
-- Tipado estricto en parámetros y valores de retorno SIEMPRE (`?string`, `void`, `array`, etc.).
-- Usa "Constructor Property Promotion" siempre que sea posible para ahorrar código.
-- NUNCA uses `mixed` a menos que sea estrictamente inevitable.
+- `src/Domain`: contratos del negocio y puertos para servicios externos. No depende de Symfony, Doctrine ni OpenAI.
+- `src/Application`: casos de uso y coordinación del flujo de negocio.
+- `src/Infrastructure`: controladores HTTP, comandos, adaptadores, persistencia Doctrine y entidades mapeadas.
+
+Las entidades están mapeadas con Doctrine, por lo que pertenecen a `Infrastructure/Entity`. Los repositorios Doctrine también están centralizados en `Infrastructure/Repository`.
+
+## Reglas de dependencia
+
+1. `Infrastructure` puede depender de `Application` y `Domain`.
+2. `Application` puede depender de contratos de `Domain`.
+3. `Domain` no puede depender de las otras capas ni de librerías de infraestructura.
+4. Las integraciones de IA, PDF y vectorización se exponen mediante interfaces en `Domain/Service` e implementaciones en `Infrastructure/Adapter`.
+
+## Frontend
+
+El cliente está en `frontend/` y usa Next.js App Router. Las rutas se organizan en `src/app`, los componentes por área funcional en `src/components` y las utilidades en `src/lib`.
+
+## Calidad
+
+El flujo de CI instala dependencias reproduciblemente, valida Composer, ejecuta PHPUnit y comprueba tipos, lint y compilación del frontend. Consulta el README raíz para los comandos de desarrollo.

@@ -18,3 +18,5 @@
 /.phpunit.cache/
 ###< phpunit/phpunit ###
 html_report/
+/coverage.txt
+/b2b_dump.sql

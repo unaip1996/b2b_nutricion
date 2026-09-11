@@ -1,24 +1,60 @@
-name: Validacion B2B Nutricion
+name: Validación B2B Nutrición
 
 on:
   push:
-    branches: [ "**" ]
+    branches: ["**"]
+  pull_request:
 
 jobs:
-  build:
+  backend:
     runs-on: ubuntu-latest
-
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: app_test
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d app_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - name: Configurar PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, intl, pdo_pgsql
+      - name: Instalar dependencias PHP
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Validar Composer
+        run: composer validate --no-check-all --strict
+      - name: Ejecutar pruebas PHP
+        env:
+          DATABASE_URL: postgresql://app:app@127.0.0.1:5432/app_test?serverVersion=16&charset=utf8
+        run: php bin/phpunit
 
-    - name: Configurar PHP 8.4
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '8.4'
-        extensions: mbstring, intl, pdo_pgsql
-
-    - name: Validar dependencias (Composer)
-      run: composer validate --no-check-all --strict || true
-
-    - name: Simulacion de Integracion Continua superada
-      run: echo "El entorno se ha construido y validado correctamente."
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Instalar dependencias JavaScript
+        run: npm ci
+      - name: Comprobar tipos
+        run: npm run check
+      - name: Ejecutar linter
+        run: npm run lint
+      - name: Compilar frontend
+        run: npm run build

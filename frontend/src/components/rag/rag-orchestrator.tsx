@@ -32,6 +32,7 @@ export function RagOrchestrator({ patientId, patientName, patientMetrics }: { pa
     // Plantilla base para directrices manuales
     useEffect(() => {
         const template = `- Distribución de macronutrientes: [EJ: 40% HC, 30% PROT, 30% GRASAS]\n- Número de ingestas: [EJ: 4 o 5 comidas]\n- Enfoque / Preferencias: [EJ: Priorizar recetas de alta saciedad, preparación rápida, etc.]`;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setQuery(template);
         setResponse(null); // Reseteamos la respuesta si cambia el paciente
     }, [patientId]);
@@ -173,7 +174,7 @@ export function RagOrchestrator({ patientId, patientName, patientMetrics }: { pa
                         <GeneratedDietDisplay dietContent={response} />
                     ) : (
                         <div className="flex h-full items-center justify-center p-8 text-center text-slate-500 italic">
-                            Completa los parámetros y pulsa "Generar Dieta" para comenzar.
+                            Completa los parámetros y pulsa &quot;Generar Dieta&quot; para comenzar.
                         </div>
                     )}
                 </div>

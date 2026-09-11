@@ -2,11 +2,9 @@
 
 import { Search, Upload, Loader2 } from "lucide-react";
 import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { fetchWithAuth } from "@/lib/auth";
 
 export function KnowledgeBaseToolbar() {
-    const router = useRouter();
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -36,7 +34,7 @@ export function KnowledgeBaseToolbar() {
                 alert(data.error || "Error al subir el documento.");
             }
         } catch (error) {
-            alert("Error de red al subir el documento.");
+            alert(`Error de red al subir el documento. ${error}`);
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = ''; // Limpiamos el input
