@@ -47,7 +47,12 @@ jobs:
           DATABASE_URL: postgresql://app:app@127.0.0.1:5432/app_test?serverVersion=16&charset=utf8
           CORS_ALLOW_ORIGIN: '^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$'
           DEFAULT_URI: 'http://localhost'
-        run: php bin/phpunit
+          JWT_SECRET_KEY: '%kernel.project_dir%/config/jwt/private.pem'
+          JWT_PUBLIC_KEY: '%kernel.project_dir%/config/jwt/public.pem'
+          JWT_PASSPHRASE: 'github_actions_dummy_pass'
+        run: |
+          php bin/console lexik:jwt:generate-keypair --env=test
+          php bin/phpunit
 
   frontend:
     runs-on: ubuntu-latest
