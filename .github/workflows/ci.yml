@@ -45,6 +45,8 @@ jobs:
       - name: Ejecutar pruebas PHP
         env:
           DATABASE_URL: postgresql://app:app@127.0.0.1:5432/app_test?serverVersion=16&charset=utf8
+          CORS_ALLOW_ORIGIN: '^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$'
+          DEFAULT_URI: 'http://localhost'
         run: php bin/phpunit
 
   frontend:
