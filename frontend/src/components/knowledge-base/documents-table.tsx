@@ -1,6 +1,6 @@
 "use client";
 
-import { Database, Trash2, AlertTriangle, CheckCircle2, Search } from "lucide-react";
+import { Database, Trash2, CheckCircle2, Search } from "lucide-react";
 import React from "react";
 
 export interface ClinicalDocument {

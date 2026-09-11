@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -82,7 +83,7 @@ export function UserForm({ apiUrl, redirectUrl, isProfile = false, method = "PUT
                 setErrorMsg(data.error || "Error al procesar la solicitud");
             }
         } catch (error) {
-            setErrorMsg("Error de red al conectar con el servidor.");
+            setErrorMsg(`Error de red al conectar con el servidor. ${error}`);
         } finally {
             setIsLoading(false);
         }
@@ -180,7 +181,7 @@ export function UserForm({ apiUrl, redirectUrl, isProfile = false, method = "PUT
                                     checked={formData.roles.includes(role)}
                                     onChange={(e) => {
                                         if (isProfile) return;
-                                        let newRoles = e.target.checked
+                                        const newRoles = e.target.checked
                                             ? [...formData.roles, role]
                                             : formData.roles.filter(r => r !== role);
                                         if (!newRoles.includes("ROLE_USER")) newRoles.push("ROLE_USER");

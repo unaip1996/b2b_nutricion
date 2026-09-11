@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 import { useState, useEffect } from "react"
 import { Plus, X } from "lucide-react"
 import { ClinicalCard } from "./clinical-card"

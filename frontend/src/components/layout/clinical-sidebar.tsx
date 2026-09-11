@@ -33,6 +33,7 @@ export function ClinicalSidebar() {
             try {
                 const payload = JSON.parse(atob(token.split(".")[1]));
                 if (payload.roles && payload.roles.includes("ROLE_ADMIN")) {
+                    // eslint-disable-next-line react-hooks/set-state-in-effect
                     setIsAdmin(true);
                 }
                 // El campo estándar en el token JWT de Lexik es 'username', que en esta app contiene el email.

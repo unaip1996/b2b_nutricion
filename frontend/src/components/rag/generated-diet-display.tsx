@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Clock, Flame, Info, Utensils, Activity } from "lucide-react";
+import { Clock, Flame, Info, Utensils } from "lucide-react";
 import { useMemo } from "react";
 
 // Interfaces que coinciden con nuestro OpenAI JSON Schema

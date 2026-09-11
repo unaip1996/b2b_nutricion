@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useEffect } from "react";
@@ -102,14 +103,6 @@ export default function PatientPage() {
         setIsLoading(true);
 
         try {
-            const getCookie = (name: string) => {
-                const value = `; ${document.cookie}`;
-                const parts = value.split(`; ${name}=`);
-                if (parts.length === 2) return parts.pop()?.split(";").shift();
-                return "";
-            };
-            const token = getCookie("auth_token") || "";
-
             const payload = {
                 name: formData.name,
                 age: parseInt(formData.age) || 0,

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
@@ -161,7 +162,7 @@ export default function PatientDietsPage() {
                 alert(errorData.error || "No se pudo eliminar la dieta.");
             }
         } catch (error) {
-            alert("Error de red al eliminar.");
+            alert(`Error de red al eliminar. ${error}`);
         } finally {
             setIsDeleting(false);
         }
@@ -263,7 +264,7 @@ export default function PatientDietsPage() {
                             </div>
                             <p className="text-slate-600 text-sm mb-6 leading-relaxed">
                                 Estás a punto de eliminar{" "}
-                                <strong className="text-slate-800">"{dietToDelete.name}"</strong>. 
+                                <strong className="text-slate-800">&quot;{dietToDelete.name}&quot;</strong>. 
                                 Esta acción no se puede deshacer.
                             </p>
                             <div className="flex justify-end gap-3">

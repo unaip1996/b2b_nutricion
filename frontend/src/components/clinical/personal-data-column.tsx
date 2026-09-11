@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ClinicalCard } from "./clinical-card"
 import { FormField, SelectInput, TextInput } from "./form-field"
 

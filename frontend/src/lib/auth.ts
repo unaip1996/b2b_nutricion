@@ -1,4 +1,4 @@
-export async function loginUser(email?: string, password?: string) {
+export async function loginUser() {
     // Aquí en el futuro harás el POST a tu backend Symfony
     // const response = await fetch('...', { method: 'POST', body: JSON.stringify({ email, password }) })
     // Si es exitoso, el backend puede devolver el token o setear una cookie httpOnly.

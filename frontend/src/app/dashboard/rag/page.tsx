@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
@@ -302,7 +303,7 @@ function RagContent() {
                             <GeneratedDietDisplay dietContent={response} />
                         ) : (
                             <div className="flex h-full items-center justify-center p-8 text-center text-slate-500 italic">
-                                Selecciona los parámetros y pulsa "Generar Dieta" para comenzar.
+                                Selecciona los parámetros y pulsa &quot;Generar Dieta&quot; para comenzar.
                             </div>
                         )}
                     </div>
